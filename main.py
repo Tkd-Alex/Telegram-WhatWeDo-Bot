@@ -43,8 +43,8 @@ for sentence in sentences:
                 print(synonymous)
                 print("==============")
 
-        # if tag.word in negation:
-        #     is_negate = True
+        if tag.word in negation:
+            is_negate = True
 
-        # if tag.pos.startswith("VER") and tag.lemma in propose and is_negate is False :
-        #     print("C'è l'intenzione di voler fare qualcosa")
+        if tag.pos.startswith("VER") and tag.lemma in propose and is_negate is False :
+            print("C'è l'intenzione di voler fare qualcosa")
