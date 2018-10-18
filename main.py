@@ -15,36 +15,50 @@ nltk.download('punkt')
 client = MongoClient()
 database = client[ 'word_history' ]
 
-propose = [ 'andare', 'fare' ]
+proposes = [ 'andare', 'fare' ]
+proposes += utils.get_synonymous(database, 'andare')
+proposes += utils.get_synonymous(database, 'fare')
+
+preposition = {
+        "di": [
+                "del",
+                "dello",
+                "della",
+                "dei",
+                "degli",
+                "delle",
+        ]
+}
+
 negation = [ 'non' ]
 
 tagger = treetaggerwrapper.TreeTagger(TAGLANG='it', TAGDIR='./TreeTagger', TAGPARFILE='./TreeTagger/lib/italian.par')
-message = 'Non ho vogl. ia di fare niente sta sera. anche se pensavo di andare al cinema. Che ne dite?'
-sentences = nltk.sent_tokenize( message )
+message = 'Non ho voglia di fare niente sta sera. anche se pensavo di andare al cinema a giocare. Che ne dite?'
+sentences = nltk.sent_tokenize( message.lower() )
 
 for sentence in sentences:
-    print("Sentence: {}".format(sentence))
+        tags_encoded = tagger.tag_text( sentence )
+        tags = treetaggerwrapper.make_tags( tags_encoded )
 
-    tags_encoded = tagger.tag_text( sentence )
-    tags = treetaggerwrapper.make_tags( tags_encoded )
+        is_negate = False
+        preposition_before = False
+        for tag in tags:
 
-    is_negate = False
-    for tag in tags:
-        print(tag)
+                synonymous = None
+                if tag.pos.startswith(("VER", "PRO", "NPR", "NOM", "ADJ")):
+                        synonymous = utils.get_synonymous(database, tag.word)
 
-        if tag.pos.startswith(("VER", "PRO", "NPR", "NOM", "ADJ")):
-                synonymous = database.synonymous.find_one({"word": tag.word})
-                if synonymous is None:
-                        synonymous = utils.scrape_synonymous(tag.word)
-                        database.synonymous.insert_one({'word': tag.word, 'synonymous': synonymous})
-                else:
-                        synonymous = synonymous['synonymous']
+                if tag.word in negation:
+                        is_negate = True
 
-                print(synonymous)
-                print("==============")
+                if tag.pos.startswith(("VER", "NOM")) and preposition_before is True:
+                        print("Il luogo o l'azione che si vuole compiere è", tag)
 
-        if tag.word in negation:
-            is_negate = True
+                if tag.pos.startswith("VER") and tag.lemma in proposes and is_negate is False:
+                        print(sentence, "C'è l'intenzione di voler fare qualcosa", tag)
 
-        if tag.pos.startswith("VER") and tag.lemma in propose and is_negate is False :
-            print("C'è l'intenzione di voler fare qualcosa")
+                # Foundend preposition maybe the next word is a 'place' or 'action to do'
+                # Anzichè escludere DI conviene includere solo A
+                preposition_before = True if tag.pos.startswith("PRE") and tag.word != 'di' and not tag.word in preposition['di'] else False
+                        
+                        
