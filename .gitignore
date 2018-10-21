@@ -106,3 +106,4 @@ venv.bak/
 # custom
 TreeTagger/
 TreeTagger/*
+proxies.txt

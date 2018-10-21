@@ -1,15 +1,25 @@
 #!/usr/bin/python3
 # -*- coding: utf-8 -*-
 
-import requests
+import requests, wikipediaapi, random, time
 from bs4 import BeautifulSoup
 
-def scrape_synonymous(word):
-    req = requests.get("https://sapere.virgilio.it/parole/sinonimi-e-contrari/{}".format(word), timeout=5)
-    soup = BeautifulSoup(req.text, 'html.parser')
-    div = soup.find("div", {"class": "sct-descr"})
-    return [ b.text for b in div.findAll('b') ]
+proxies = open("proxies.txt","r").read().split("\n")
+headers = {'User-Agent': "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/68.0.3440.84 Safari/537.36"}
 
+def scrape_synonymous(word):
+        try:
+                random.seed(time.perf_counter())
+                proxy = random.choice(proxies)
+                proxy = { 'http': 'http://{}'.format(proxy), 'https': 'http://{}'.format(proxy)}
+                req = requests.get("https://sapere.virgilio.it/parole/sinonimi-e-contrari/{}".format(word), timeout=5, proxies=proxy, headers=headers)
+                soup = BeautifulSoup(req.text, 'html.parser')
+                div = soup.find("div", {"class": "sct-descr"})
+                return [ b.text for b in div.findAll('b') ] if div != None else []
+        except Exception as e:
+                print("There was an error with synonymous: {}".format(e))
+                return []
+        
 def get_synonymous(database, word):
     synonymous = database.synonymous.find_one({"word": word})
     if synonymous is None:
