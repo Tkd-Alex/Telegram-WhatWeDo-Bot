@@ -6,7 +6,7 @@ from __future__ import unicode_literals
 import warnings
 warnings.simplefilter(action='ignore', category=FutureWarning)
 
-import treetaggerwrapper, re, nltk, italian_dictionary, utils
+import treetaggerwrapper, re, nltk, utils
 from pprint import pprint
 from pymongo import MongoClient
 
@@ -33,7 +33,7 @@ preposition = {
 negation = [ 'non' ]
 
 tagger = treetaggerwrapper.TreeTagger(TAGLANG='it', TAGDIR='./TreeTagger', TAGPARFILE='./TreeTagger/lib/italian.par')
-message = 'Non ho voglia di fare niente sta sera. anche se pensavo di andare al cinema a giocare. Che ne dite?'
+message = 'Andiamo stasera in qualche posto? Bingo?'
 sentences = nltk.sent_tokenize( message.lower() )
 
 for sentence in sentences:
