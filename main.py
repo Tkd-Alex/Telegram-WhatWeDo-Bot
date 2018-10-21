@@ -33,7 +33,7 @@ preposition = {
 negation = [ 'non' ]
 
 tagger = treetaggerwrapper.TreeTagger(TAGLANG='it', TAGDIR='./TreeTagger', TAGPARFILE='./TreeTagger/lib/italian.par')
-message = 'Andiamo stasera in qualche posto? Bingo?'
+message = 'Stasera andiamo in palestra?'
 sentences = nltk.sent_tokenize( message.lower() )
 
 for sentence in sentences:
@@ -45,8 +45,8 @@ for sentence in sentences:
         for tag in tags:
 
                 synonymous = None
-                if tag.pos.startswith(("VER", "PRO", "NPR", "NOM", "ADJ")):
-                        synonymous = utils.get_synonymous(database, tag.word)
+                # if tag.pos.startswith(("VER", "PRO", "NPR", "NOM", "ADJ")):
+                #         synonymous = utils.get_synonymous(database, tag.word)
 
                 if tag.word in negation:
                         is_negate = True
