@@ -47,10 +47,10 @@ dictionary += [ p.rstrip() for p in open("paroleitaliane/60000_parole_italiane.t
 dictionary += [ p.rstrip() for p in open("paroleitaliane/660000_parole_italiane.txt","r").readlines() ]
 dictionary += [ p.rstrip() for p in open("paroleitaliane/95000_parole_italiane_con_nomi_propri.txt","r").readlines() ]
 dictionary += [ p.rstrip() for p in open("paroleitaliane/parole_uniche.txt","r").readlines() ]
+dictionary += [ p.rstrip() for p in open("paroleitaliane/9000_nomi_propri.txt","r").readlines() ]
 
-# dictionary += [ p.rstrip() for p in open("lista_badwords.txt","r").readlines() ]
-# dictionary += [ p.rstrip() for p in open("lista_cognomi.txt","r").readlines() ]
-# dictionary += [ p.rstrip() for p in open("9000_nomi_propri.txt","r").readlines() ]
+# dictionary += [ p.rstrip() for p in open("paroleitaliane/lista_badwords.txt","r").readlines() ]
+# dictionary += [ p.rstrip() for p in open("paroleitaliane/lista_cognomi.txt","r").readlines() ]
 
 print("Total word collect: {}".format(len(dictionary)))
 dictionary = list(set(dictionary))
