@@ -39,6 +39,7 @@ def update_word(word, index, total):
     except Exception as e:
         print("There was an error during update_word: {}".format(e))
 
+"""
 # Join all .txt dicionaries
 dictionary = []
 dictionary += [ p.rstrip() for p in open("paroleitaliane/1000_parole_italiane_comuni.txt","r").readlines() ]
@@ -63,9 +64,10 @@ print("Only NOM noun and NPR name: {}".format(len(dictionary)))
 
 # Multi threading (over 150) for populate database with synonymous and summary from wikipedia
 Parallel(n_jobs=150, backend="threading")( delayed(update_word)(dictionary[index], index, len(dictionary)) for index in range(0, len(dictionary)) )
+"""
 
 # Remove all words with empty summary
-database.words.remove({"summary": ""})
+# database.words.remove({"summary": ""})
 
 summaries = ' '.join( [ w['summary'].lower() for w in database.words.find({}) ] ) # Join all summaries
 summaries = summaries.replace('\n', ' ').replace('\t', ' ') # Remove new lines and tabulation
@@ -76,9 +78,17 @@ summaries = re.sub('^[0-9]+', ' ', summaries) # Remove numbers
 summaries_words = [ w.strip() for w in summaries.split(' ') if len( w.strip() ) > 1 ] 
 # Count all occurency
 wordcounts_lower = Counter(summaries_words)
-# Crete array of { 'word': 'xxx', 'occurency': 100 } with occurency => 100 and keep only "NPR", "NOM"
-wordcounts_lower = [ {'word': w, 'occurency': wordcounts_lower[w] } for w in wordcounts_lower if wordcounts_lower[w] >= 100 if return_pos(w).startswith(("NPR", "NOM")) ]
+# Crete array of { 'word': 'xxx', 'occurency': 100 } with occurency => 100 and keep only "NPR", "NOM", "ADJ"
+wordcounts_lower = [ 
+    {
+        'word': word, 
+        'occurency': wordcounts_lower[word] 
+    } 
+    for word in wordcounts_lower 
+    if wordcounts_lower[word] >= 100 and len(word) >= 4 and return_pos(word).startswith(("NPR", "NOM", "ADJ")) ]
 # Sort array by occurency
 wordcounts_lower = sorted(wordcounts_lower, key=lambda x: x['occurency'], reverse=True)
 # Save variable in pickled file.
 pickle.dump(wordcounts_lower, open('wordcounts_lower.pkl', 'wb'))
+
+# wordcounts_lower = pickle.load(open('wordcounts_lower.pkl', 'rb'))
