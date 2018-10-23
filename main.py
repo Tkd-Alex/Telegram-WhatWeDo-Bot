@@ -46,6 +46,10 @@ preposition = {
     ]
 }
 
+# Cosa facciamo stasera?
+# Dove andiamo oggi?
+# Io pensavo di andare al cinema
+# Io voglio studiare programmazione
 def analyzes_message(bot, update, chat_data):
     # Create chat data array sentence
     if "sentence" not in chat_data:
@@ -59,23 +63,36 @@ def analyzes_message(bot, update, chat_data):
         tags = treetaggerwrapper.make_tags( tags_encoded )
 
         is_negate = False
-        preposition_before = False
-        for tag in tags:
+        middle = {
+            'index': -1,
+            'status': False
+        }
+        for index in range(0, len(tags)):
 
-            if tag.word in negation:
+            if tags[index].word in negation:
                 is_negate = True
 
-            if tag.pos.startswith(("VER", "NOM")) and preposition_before is True:
-                if tag.word not in proposals:
-                    proposals.append(tag.word)
+            print(tags[index])
+            if tags[index].pos.startswith(("VER", "NOM")) and utils.good_middle(middle, tags) is True:
+                propose = None
+                if tags[middle['index']-1].lemma != "andare":
+                    propose = "{} {} {}".format(tags[middle['index']-1].word, tags[middle['index']].word, tags[index].word)
+                elif tags[index].lemma != "fare":
+                    propose = tags[index].word
+
+                if propose != None and propose not in proposals:
+                    proposals.append(propose)
             
-            if tag.pos.startswith("VER") and tag.lemma in proposes and is_negate is False:
-                title_proposes = sentence.capitalize()
+            if tags[index].pos.startswith("VER") and tags[index].lemma in proposes and is_negate is False:
+                # title_proposes = sentence.capitalize()
+                title_proposes = update.message.text
 
             # Foundend preposition maybe the next word is a 'place' or 'action to do'
             # Anzichè escludere DI conviene includere solo A
-            preposition_before = True if tag.pos.startswith("PRE") and tag.word != 'di' and not tag.word in preposition['di'] else False
-    
+            if tags[index].pos.startswith(("PRE", "DET")) and tags[index].word != 'di' and not tags[index].word in preposition['di']:
+                middle['status'] = True 
+                middle['index'] = index
+     
     if [ a for a in chat_data["sentence"] if a['closed'] is False ] == []:
         if title_proposes != None:
             
