@@ -101,7 +101,7 @@ def analyzes_message(bot, update, chat_data):
                 if len(keyboard[len(keyboard)-1]) == 3:
                     keyboard.append([])
                 
-                keyboard[len(keyboard)-1].append( InlineKeyboardButton(proposals[index].capitalize(), callback_data=str(index+1)) )
+                keyboard[len(keyboard)-1].append( InlineKeyboardButton(proposals[index].capitalize(), callback_data=index) )
     
             reply_markup = InlineKeyboardMarkup(keyboard)
             new_sentence = bot.send_message(update.message.chat_id, title_proposes, reply_markup=reply_markup)
@@ -131,8 +131,9 @@ def analyzes_message(bot, update, chat_data):
                     keyboard.append([])
                 
                 keyboard[len(keyboard)-1].append(
-                    InlineKeyboardButton(proposals[index]["propose"].capitalize(), 
-                    callback_data=str(index+1)) 
+                    InlineKeyboardButton( 
+                        "{} {}".format(proposals[index]["propose"].capitalize(), "" if proposals[index]["vote"] == 0 else "({})".format(proposals[index]["vote"]) 
+                    ) , callback_data=index ) 
                 )
             
             reply_markup = InlineKeyboardMarkup(keyboard)
@@ -143,6 +144,31 @@ def analyzes_message(bot, update, chat_data):
                 reply_markup=reply_markup
             )
 
+def button(bot, update, chat_data):
+    query = update.callback_query
+    chat_data["sentence"][len(chat_data["sentence"])-1]['proposals'][int(query.data)]['vote'] += 1
+    
+    last_sentence = chat_data["sentence"][len(chat_data["sentence"])-1]
+    keyboard = [ [] ]
+    proposals = last_sentence["proposals"]
+    for index in range(0, len(proposals)):
+        if len(keyboard[len(keyboard)-1]) == 3:
+            keyboard.append([])
+        
+        keyboard[len(keyboard)-1].append(
+            InlineKeyboardButton( 
+                "{} {}".format(proposals[index]["propose"].capitalize(), "" if proposals[index]["vote"] == 0 else "({})".format(proposals[index]["vote"]) 
+            ) , callback_data=index )
+        )
+
+    reply_markup = InlineKeyboardMarkup(keyboard)
+    bot.edit_message_text(
+        last_sentence['title'], 
+        chat_id=query.message.chat.id, 
+        message_id=last_sentence['message_id'], 
+        reply_markup=reply_markup
+    )
+
 def error(bot, update, error):
     logger.error('Update "%s" caused error "%s"' % (update, error))
                      
@@ -150,6 +176,7 @@ if __name__ == '__main__':
     updater = Updater(token, request_kwargs={'read_timeout': 20, 'connect_timeout': 20})
     dp = updater.dispatcher
     dp.add_handler(MessageHandler(Filters.text, analyzes_message, pass_chat_data=True))
+    dp.add_handler(CallbackQueryHandler(button, pass_chat_data=True))
     dp.add_error_handler(error)
     updater.start_polling(timeout=25)
     updater.idle()
