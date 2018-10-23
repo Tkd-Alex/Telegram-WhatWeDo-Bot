@@ -47,6 +47,10 @@ preposition = {
 }
 
 def analyzes_message(bot, update, chat_data):
+    # Create chat data array sentence
+    if "sentence" not in chat_data:
+        chat_data["sentence"] = []
+
     sentences = nltk.sent_tokenize( update.message.text.lower() )
     proposals = []
     title_proposes = None
@@ -62,7 +66,8 @@ def analyzes_message(bot, update, chat_data):
                 is_negate = True
 
             if tag.pos.startswith(("VER", "NOM")) and preposition_before is True:
-                proposals.append(tag.word)
+                if tag.word not in proposals:
+                    proposals.append(tag.word)
             
             if tag.pos.startswith("VER") and tag.lemma in proposes and is_negate is False:
                 title_proposes = sentence.capitalize()
@@ -71,20 +76,55 @@ def analyzes_message(bot, update, chat_data):
             # Anzichè escludere DI conviene includere solo A
             preposition_before = True if tag.pos.startswith("PRE") and tag.word != 'di' and not tag.word in preposition['di'] else False
     
-    if title_proposes != None:
-        chat_data["sentence"] = []
-        chat_data["sentence"].append({
-                "title": title_proposes,
-                "closed": False,
-                "proposals": proposals
-            }
-        )
-        keyboard = [ [] ]
-        for index in range(0, len(proposals)):
-            keyboard[0].append( InlineKeyboardButton(proposals[index].capitalize(), callback_data=str(index+1)) )
- 
-        reply_markup = InlineKeyboardMarkup(keyboard)
-        update.message.reply_text(title_proposes, reply_markup=reply_markup)
+    if [ a for a in chat_data["sentence"] if a['closed'] is False ] == []:
+        if title_proposes != None:
+            
+            keyboard = [ [] ]
+            for index in range(0, len(proposals)):
+                if len(keyboard[len(keyboard)-1]) == 3:
+                    keyboard.append([])
+                
+                keyboard[len(keyboard)-1].append( InlineKeyboardButton(proposals[index].capitalize(), callback_data=str(index+1)) )
+    
+            reply_markup = InlineKeyboardMarkup(keyboard)
+            new_sentence = bot.send_message(update.message.chat_id, title_proposes, reply_markup=reply_markup)
+            chat_data["sentence"].append({
+                    "message_id": new_sentence.message_id,
+                    "title": title_proposes,
+                    "closed": False,
+                    "proposals": [ {"propose": p, "vote": 0 } for p in proposals ]
+                }
+            )
+    else:
+        # Foundend open sentence add proposals:
+        if proposals != []:
+            last_sentence = chat_data["sentence"][len(chat_data["sentence"])-1]
+            old_proposals = last_sentence["proposals"]
+            for propose in proposals:
+                if propose not in [ p['propose'] for p in old_proposals ]:
+                    last_sentence["proposals"].append({
+                        "propose": propose, 
+                        "vote": 0
+                    })
+
+            keyboard = [ [] ]
+            proposals = last_sentence["proposals"]
+            for index in range(0, len(proposals)):
+                if len(keyboard[len(keyboard)-1]) == 3:
+                    keyboard.append([])
+                
+                keyboard[len(keyboard)-1].append(
+                    InlineKeyboardButton(proposals[index]["propose"].capitalize(), 
+                    callback_data=str(index+1)) 
+                )
+            
+            reply_markup = InlineKeyboardMarkup(keyboard)
+            bot.edit_message_text(
+                last_sentence['title'], 
+                chat_id=update.message.chat_id, 
+                message_id=last_sentence['message_id'], 
+                reply_markup=reply_markup
+            )
 
 def error(bot, update, error):
     logger.error('Update "%s" caused error "%s"' % (update, error))
