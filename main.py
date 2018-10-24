@@ -47,9 +47,10 @@ preposition = {
     ]
 }
 
-# andiamo all'estero
-
-# IO DIREI DI STUDIARE (NOT WORK)
+# Sistemare le preposizioni, in particolare IN
+# Fixare le risponde dirette ad esempio:
+# D: Dove andiamo questa sera?
+# R: Cinema!
 def analyzes_message(bot, update):
     sentences = nltk.sent_tokenize( update.message.text.lower() )
     proposals = []
