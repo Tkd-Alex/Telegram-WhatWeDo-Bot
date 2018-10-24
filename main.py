@@ -47,10 +47,7 @@ preposition = {
     ]
 }
 
-# Cosa facciamo stasera?
-# Dove andiamo oggi?
-# Io pensavo di andare al cinema
-# Io voglio studiare programmazione
+# andiamo all'estero
 
 # IO DIREI DI STUDIARE (NOT WORK)
 def analyzes_message(bot, update):
@@ -61,44 +58,39 @@ def analyzes_message(bot, update):
         tags_encoded = tagger.tag_text( sentence )
         tags = treetaggerwrapper.make_tags( tags_encoded )
 
-        is_negate = False
-        middle = {
-            'index': -1,
-            'status': False
-        }
-        for index in range(0, len(tags)):
-            print(tags[index])
+        negations = [ w.word for w in tags if w.word in negation ]
+        if len(negations) % 2 == 0:
+            middle = { 'index': -1, 'status': False }
+            for index in range(0, len(tags)):
+                print(tags[index])
 
-            if tags[index].word in negation:
-                is_negate = True
+                if tags[index].pos.startswith(("VER", "NOM")):
+                    propose = None
+                    
+                    if utils.good_middle(middle, tags) is True:
+                        if tags[middle['index']-1].lemma != "andare":
+                            propose = "{} {} {}".format(tags[middle['index']-1].word, tags[middle['index']].word, tags[index].word)
+                    
+                    if tags[index].lemma not in proposes and propose is None:
+                        if index+1 < len(tags):
+                            if tags[index+1].pos.startswith("NOM"):
+                                propose = "{} {}".format(tags[index].word, tags[index+1].word)
+                        elif not tags[index].pos.startswith("NOM"):
+                            propose = tags[index].word
 
-            if tags[index].pos.startswith(("VER", "NOM")):
-                propose = None
+                    if propose != None and propose not in proposals:
+                        proposals.append(propose)
                 
-                if utils.good_middle(middle, tags) is True:
-                    if tags[middle['index']-1].lemma != "andare":
-                        propose = "{} {} {}".format(tags[middle['index']-1].word, tags[middle['index']].word, tags[index].word)
-                
-                if tags[index].lemma not in proposes and propose is None:
-                    if index+1 < len(tags):
-                        if tags[index+1].pos.startswith("NOM"):
-                            propose = "{} {}".format(tags[index].word, tags[index+1].word)
-                    elif not tags[index].pos.startswith("NOM"):
-                        propose = tags[index].word
+                if tags[index].pos.startswith("VER") and tags[index].lemma in proposes:
+                    pool_title = update.message.text
 
-                if propose != None and propose not in proposals:
-                    proposals.append(propose)
-            
-            if tags[index].pos.startswith("VER") and tags[index].lemma in proposes and is_negate is False:
-                pool_title = update.message.text
-
-            # Foundend preposition maybe the next word is a 'place' or 'action to do'
-            # Anzichè escludere DI conviene includere solo A
-            if tags[index].pos.startswith(("PRE", "DET")) and tags[index].word != 'di' and not tags[index].word in preposition['di']:
-                middle['status'] = True 
-                middle['index'] = index
-            else:
-                middle = { 'index': -1, 'status': False }
+                # Foundend preposition maybe the next word is a 'place' or 'action to do'
+                # Anzichè escludere DI conviene includere solo A
+                if tags[index].pos.startswith(("PRE", "DET")) and tags[index].word != 'di' and not tags[index].word in preposition['di']:
+                    middle['status'] = True 
+                    middle['index'] = index
+                else:
+                    middle = { 'index': -1, 'status': False }
 
 
     last_pool = database.pool.find_one({"chat_id": update.message.chat_id, "closed": False})
