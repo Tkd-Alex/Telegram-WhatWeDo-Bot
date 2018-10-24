@@ -72,13 +72,20 @@ def analyzes_message(bot, update):
             if tags[index].word in negation:
                 is_negate = True
 
-            if tags[index].pos.startswith(("VER", "NOM")) and utils.good_middle(middle, tags) is True:
+            if tags[index].pos.startswith(("VER", "NOM")):
                 propose = None
-                if tags[middle['index']-1].lemma != "andare":
-                    propose = "{} {} {}".format(tags[middle['index']-1].word, tags[middle['index']].word, tags[index].word)
-                elif tags[index].lemma != "fare":
-                    propose = tags[index].word
                 
+                if utils.good_middle(middle, tags) is True:
+                    if tags[middle['index']-1].lemma != "andare":
+                        propose = "{} {} {}".format(tags[middle['index']-1].word, tags[middle['index']].word, tags[index].word)
+                
+                if tags[index].lemma not in proposes and propose is None:
+                    if index+1 < len(tags):
+                        if tags[index+1].pos.startswith("NOM"):
+                            propose = "{} {}".format(tags[index].word, tags[index+1].word)
+                    elif not tags[index].pos.startswith("NOM"):
+                        propose = tags[index].word
+
                 if propose != None and propose not in proposals:
                     proposals.append(propose)
             
@@ -90,6 +97,9 @@ def analyzes_message(bot, update):
             if tags[index].pos.startswith(("PRE", "DET")) and tags[index].word != 'di' and not tags[index].word in preposition['di']:
                 middle['status'] = True 
                 middle['index'] = index
+            else:
+                middle = { 'index': -1, 'status': False }
+
 
     last_pool = database.pool.find_one({"chat_id": update.message.chat_id, "closed": False})
     if last_pool is None:
