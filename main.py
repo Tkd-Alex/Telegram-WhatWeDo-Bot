@@ -53,7 +53,7 @@ preposition = {
 # Io voglio studiare programmazione
 
 # IO DIREI DI STUDIARE (NOT WORK)
-def analyzes_message(bot, update, chat_data):
+def analyzes_message(bot, update):
     sentences = nltk.sent_tokenize( update.message.text.lower() )
     proposals = []
     pool_title = None
@@ -96,6 +96,7 @@ def analyzes_message(bot, update, chat_data):
         if pool_title != None:
             keyboard = [ [] ]
             new_pool = {
+                "owner": update.message.from_user.id,
                 "chat_id": update.message.chat_id,
                 "title": pool_title,
                 "closed": False,
@@ -150,7 +151,7 @@ def analyzes_message(bot, update, chat_data):
                 reply_markup=reply_markup
             )
 
-def button(bot, update, chat_data):
+def button(bot, update):
     query = update.callback_query
     callback_data = json.loads(query.data)
     pool = database.pool.find_one({"_id": ObjectId(callback_data['pool_id'])})
@@ -179,14 +180,24 @@ def button(bot, update, chat_data):
         )
         database.pool.update_one({"_id": pool['_id']}, {"$set": {'proposals': pool["proposals"]} })
 
+def close_pool(bot, update):
+    pool = database.pool.find_one({"chat_id": update.message.chat_id, "closed": False, "owner": update.message.from_user.id})
+    if pool is None:
+        update.message.reply_text('Non hai sondaggi aperti in questo gruppo!')
+    else:
+        # Aggiungere chi ha vinto il sonaggio
+        update.message.reply_text('Sondaggio: {}\nChiuso!'.format(pool['title']))
+        database.pool.update_one({"_id": pool['_id']}, {"$set": {'closed': True}} )
+
 def error(bot, update, error):
     logger.error('Update "%s" caused error "%s"' % (update, error))
                      
 if __name__ == '__main__':
     updater = Updater(token, request_kwargs={'read_timeout': 20, 'connect_timeout': 20})
     dp = updater.dispatcher
-    dp.add_handler(MessageHandler(Filters.text, analyzes_message, pass_chat_data=True))
-    dp.add_handler(CallbackQueryHandler(button, pass_chat_data=True))
+    dp.add_handler(CommandHandler("close_pool", close_pool))
+    dp.add_handler(MessageHandler(Filters.text, analyzes_message))
+    dp.add_handler(CallbackQueryHandler(button))
     dp.add_error_handler(error)
     updater.start_polling(timeout=25)
     updater.idle()
