@@ -30,27 +30,58 @@ nltk.download('punkt')
 client = MongoClient()
 database = client[ 'pool_group' ]
 
-proposes = [ 'andare', 'fare' ]
-# proposes += utils.get_synonymous(database, 'andare')
-# proposes += utils.get_synonymous(database, 'fare')
+mezzi_di_trasporto = [ p.rstrip() for p in open("mezzi_di_trasporto.txt","r").readlines() ]
 
-negation = [ 'non' ]
+prepositions = {
+    "di":       False, # a casa di alex (?)
+    "del":      False,
+    "dello":    False,
+    "della":    False,
+    "dei":      False,
+    "degli":    False,
+    "delle":    False,
+    
+    "a":        True, # a piedi? (solved with dict)
+    "al":       True,
+    "allo":     True,
+    "alla":     True,
+    "ai":       False,
+    "agli":     False,
+    "alle":     False,
 
-preposition = {
-    "di": [
-        "del",
-        "dello",
-        "della",
-        "dei",
-        "degli",
-        "delle",
-    ]
+    "da":       False,
+    "dal":      False,
+    "dallo":    False,
+    "dalla":    False,
+    "dai":      False,
+    "dagli":    False,
+    "dalle":    False,
+
+    "in":       True, # in auto? (solved with dict)
+    "nel":      False,
+    "nello":    False,
+    "nella":    False,
+    "nei":      False,
+    "negli":    False,
+    "nelle":    False,
+
+    "con":      False,
+
+    "su":       False,
+    "sul":      False,
+    "sullo":    False,
+    "sulla":    False,
+    "sui":      False,
+    "sugli":    False,
+    "sulle":    False,
+
+    "per":      False,
+
+    "tra":      False,
+
+    "fra":      False
 }
 
-# Sistemare le preposizioni, in particolare IN
-# Fixare le risponde dirette ad esempio:
-# D: Dove andiamo questa sera?
-# R: Cinema!
 def analyzes_message(bot, update):
     sentences = nltk.sent_tokenize( update.message.text.lower() )
     proposals = []
@@ -59,20 +90,23 @@ def analyzes_message(bot, update):
         tags_encoded = tagger.tag_text( sentence )
         tags = treetaggerwrapper.make_tags( tags_encoded )
 
-        negations = [ w.word for w in tags if w.word in negation ]
+        negations = [ w.word for w in tags if w.word in [ 'non' ] ]
         if len(negations) % 2 == 0:
             middle = { 'index': -1, 'status': False }
             for index in range(0, len(tags)):
                 print(tags[index])
 
                 if tags[index].pos.startswith(("VER", "NOM")):
+                    if tags[index].word in mezzi_di_trasporto:
+                        continue
+
                     propose = None
                     
                     if utils.good_middle(middle, tags) is True:
-                        if tags[middle['index']-1].lemma != "andare":
+                        if not(tags[middle['index']-1].lemma == "andare" and tags[index].pos.startswith("VER")):
                             propose = "{} {} {}".format(tags[middle['index']-1].word, tags[middle['index']].word, tags[index].word)
                     
-                    if tags[index].lemma not in proposes and propose is None:
+                    if tags[index].lemma != "andare" and propose is None:
                         if index+1 < len(tags):
                             if tags[index+1].pos.startswith("NOM"):
                                 propose = "{} {}".format(tags[index].word, tags[index+1].word)
@@ -82,12 +116,11 @@ def analyzes_message(bot, update):
                     if propose != None and propose not in proposals:
                         proposals.append(propose)
                 
-                if tags[index].pos.startswith("VER") and tags[index].lemma in proposes:
+                if tags[index].pos.startswith("VER") and tags[index].lemma in [ 'andare', 'fare' ]:
                     pool_title = update.message.text
 
                 # Foundend preposition maybe the next word is a 'place' or 'action to do'
-                # Anzichè escludere DI conviene includere solo A
-                if tags[index].pos.startswith(("PRE", "DET")) and tags[index].word != 'di' and not tags[index].word in preposition['di']:
+                if  tags[index].pos.startswith("DET") or (tags[index].pos.startswith("PRE") and tags[index].lemma in prepositions and prepositions[tags[index].lemma] is True):
                     middle['status'] = True 
                     middle['index'] = index
                 else:
@@ -123,7 +156,7 @@ def analyzes_message(bot, update):
             database.pool.update_one({"_id": new_pool['_id']}, {"$set": {"message_id": new_pool_message.message_id} })
     else:
         # Foundend open pool and new proposals to add:
-        if proposals != []:
+        if [ p['propose'] for p in last_pool["proposals"] if p['propose'] in proposals]  != proposals:
             for propose in proposals:
                 if propose not in [ p['propose'] for p in last_pool["proposals"] ]:
                     last_pool["proposals"].append({
