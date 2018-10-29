@@ -1,0 +1,106 @@
+piedi
+carrozza
+segway
+bici
+bicicletta
+velocipedi
+tandem
+velotaxi
+risciò
+slitte
+taxi
+ciclomotore
+motoveicolo
+motocicletta
+motocarrozzetta
+motocarro
+motoarticolato
+mototrattore
+triciclo
+quadriciclo
+autoveicolo
+autovettura
+automobile
+berlina
+monovolume
+station wagon
+pick-up
+coupé
+cabriolet
+roadster
+suv
+camper
+ambulanza
+autobus
+autobus guidato
+autosnodato
+scuolabus
+phileas
+guidovia
+autocarro
+furgone
+autotreno
+autoarticolato
+road train
+trattore stradale
+trattore agricolo
+trattore d'artiglieria
+autoveicolo per uso speciale
+autoveicolo per trasporto specifico
+rimorchio
+semirimorchio
+roulotte
+filoveicolo
+filobus
+filosnodato
+filocarro
+filotreno
+treno
+locomotiva
+carrozza ferroviaria
+carro ferroviario merci
+tram
+tram snodato
+funicolare
+funivia
+slittovia
+seggiovia
+skilift
+treno a levitazione magnetica
+metropolitana
+aeroscafo
+aliscafo
+barca a vela
+canoa
+imbarcazione
+nave
+traghetto
+vaporetto
+motonave
+battello foraneo
+motoscafo
+motozattera
+Subacquei
+sommergibile
+batiscafo
+sottomarino
+aerei
+aeroplano
+aereo
+aerostato
+aliante
+deltaplano
+jeep
+dirigibile
+elicottero
+girocottero
+autogiro
+elicoplano
+mongolfiera
+pallone aerostatico
+convertiplano
+ekranoplano
+razzo
+space shuttle
+sonda spaziale
+veicolo spaziale
