@@ -6,7 +6,7 @@ from __future__ import unicode_literals
 import warnings
 warnings.simplefilter(action='ignore', category=FutureWarning)
 
-import treetaggerwrapper, re, nltk, logging, json, utils
+import treetaggerwrapper, re, nltk, logging, json, utils, locale, calendar, datetime
 from pprint import pprint
 from pymongo import MongoClient
 from bson import ObjectId
@@ -30,7 +30,26 @@ nltk.download('punkt')
 client = MongoClient()
 database = client[ 'pool_group' ]
 
-mezzi_di_trasporto = [ p.rstrip() for p in open("mezzi_di_trasporto.txt","r").readlines() ]
+calendar.setfirstweekday(calendar.MONDAY)
+locale.setlocale(locale.LC_ALL, 'it_IT.utf8')
+
+week_days = list( calendar.day_name )
+
+means_of_transport = [ p.rstrip() for p in open("mezzi_di_trasporto.txt","r").readlines() ]
+
+# stasera, domani, a pranzo, a cena, dopodomani
+
+time_transformers = {
+    "domani": 1,
+    "dopodomani": 2
+}
+
+time_pointers = {
+    "stasera": 20,
+    "pranzo": 13,
+    "cena": 21,
+    "colazione": 8
+}
 
 prepositions = {
     "di":       False, # a casa di alex (?)
@@ -85,20 +104,38 @@ prepositions = {
 def analyzes_message(bot, update):
     sentences = nltk.sent_tokenize( update.message.text.lower() )
     proposals = []
-    pool_title = None
+    
+    # Default pool day = TODAY
+    new_pool = { "title": None, "closed": False, "pool_day": week_days[datetime.datetime.now().weekday()] } 
+    
     for sentence in sentences:
         tags_encoded = tagger.tag_text( sentence )
         tags = treetaggerwrapper.make_tags( tags_encoded )
 
         negations = [ w.word for w in tags if w.word in [ 'non' ] ]
+
         if len(negations) % 2 == 0:
             middle = { 'index': -1, 'status': False }
             for index in range(0, len(tags)):
                 print(tags[index])
 
                 if tags[index].pos.startswith(("VER", "NOM")):
-                    if tags[index].word in mezzi_di_trasporto:
-                        continue
+
+                    if tags[index].pos.startswith("NOM"):
+                        # This word is a day! Set pool_day and ignore the following code.
+                        is_day = utils.is_day(tags[index].word, week_days)
+                        if is_day != -1:
+                            new_pool['pool_day'] = week_days[is_day]
+                            continue
+
+                        # This word is a time_transformers! Set new pool day ad +1/+2 on today timestamp.
+                        if tags[index].word in time_transformers:
+                            new_pool['pool_day'] = week_days[ (datetime.datetime.now() + datetime.timedelta( days=time_transformers[tags[index].word] )).weekday() ]
+                            continue
+
+                        # This word is a mean of transport! Set pool_day and ignore the following code.
+                        if tags[index].word in means_of_transport: 
+                            continue
 
                     propose = None
                     
@@ -117,7 +154,7 @@ def analyzes_message(bot, update):
                         proposals.append(propose)
                 
                 if tags[index].pos.startswith("VER") and tags[index].lemma in [ 'andare', 'fare' ]:
-                    pool_title = update.message.text
+                    new_pool['title'] = update.message.text
 
                 # Foundend preposition maybe the next word is a 'place' or 'action to do'
                 if  tags[index].pos.startswith("DET") or (tags[index].pos.startswith("PRE") and tags[index].lemma in prepositions and prepositions[tags[index].lemma] is True):
@@ -126,24 +163,18 @@ def analyzes_message(bot, update):
                 else:
                     middle = { 'index': -1, 'status': False }
 
-
-    last_pool = database.pool.find_one({"chat_id": update.message.chat_id, "closed": False})
+    # There is another pool open in the same day?
+    last_pool = database.pool.find_one({"chat_id": update.message.chat_id, "closed": False, "pool_day": new_pool['pool_day']})
     if last_pool is None:
-        if pool_title != None:
-            keyboard = [ [] ]
-            new_pool = {
-                "owner": update.message.from_user.id,
-                "chat_id": update.message.chat_id,
-                "title": pool_title,
-                "closed": False,
-                "proposals": [ 
-                    {
-                        "propose": p, 
-                        "voted_by": [] 
-                    } for p in proposals ]
-            }
+        if new_pool['title'] != None:
+            new_pool["owner"] = update.message.from_user.id,
+            new_pool["chat_id"] = update.message.chat_id,
+            new_pool["proposals"] = [ { "propose": p, "voted_by": [] } for p in proposals ]
+        
             database.pool.insert_one( new_pool )
             
+            """
+            keyboard = [ [] ]
             for index in range(0, len(proposals)):
                 if len(keyboard[len(keyboard)-1]) == 3:
                     keyboard.append([])
@@ -152,7 +183,9 @@ def analyzes_message(bot, update):
                 keyboard[len(keyboard)-1].append( InlineKeyboardButton(proposals[index].capitalize(), callback_data=callback_data) )
     
             reply_markup = InlineKeyboardMarkup(keyboard)
-            new_pool_message = bot.send_message(update.message.chat_id, pool_title, reply_markup=reply_markup)
+            """
+
+            new_pool_message = bot.send_message(update.message.chat_id, new_pool['title'], reply_markup=utils.render_keyboard( new_pool ))
             database.pool.update_one({"_id": new_pool['_id']}, {"$set": {"message_id": new_pool_message.message_id} })
     else:
         # Foundend open pool and new proposals to add:
@@ -164,27 +197,26 @@ def analyzes_message(bot, update):
                         "voted_by": []
                     })
 
-            keyboard = [ [] ]
-            for index in range(0, len(last_pool["proposals"])):
-                if len(keyboard[len(keyboard)-1]) == 3:
-                    keyboard.append([])
-                
-                callback_data = json.dumps({ 'index': index, 'pool_id': str(last_pool['_id']) })
-                keyboard[len(keyboard)-1].append(
-                    InlineKeyboardButton( 
-                        "{} {}".format(
-                            last_pool["proposals"][index]["propose"].capitalize(), 
-                            "" if len(last_pool["proposals"][index]["voted_by"]) == 0 else "({})".format(len(last_pool["proposals"][index]["voted_by"])) 
-                    ) , callback_data=callback_data ) 
-                )
+            # keyboard = [ [] ]
+            # for index in range(0, len(last_pool["proposals"])):
+            #     if len(keyboard[len(keyboard)-1]) == 3:
+            #         keyboard.append([])
+            #     
+            #     callback_data = json.dumps({ 'index': index, 'pool_id': str(last_pool['_id']) })
+            #     keyboard[len(keyboard)-1].append(
+            #         InlineKeyboardButton( 
+            #             "{} {}".format(
+            #                 last_pool["proposals"][index]["propose"].capitalize(), 
+            #                 "" if len(last_pool["proposals"][index]["voted_by"]) == 0 else "({})".format(len(last_pool["proposals"][index]["voted_by"])) 
+            #         ) , callback_data=callback_data ) 
+            #     )
             
             database.pool.update_one({"_id": last_pool['_id']}, {"$set": {'proposals': last_pool["proposals"]} })
-            reply_markup = InlineKeyboardMarkup(keyboard)
             bot.edit_message_text(
                 last_pool['title'], 
                 chat_id=update.message.chat_id, 
                 message_id=last_pool['message_id'], 
-                reply_markup=reply_markup
+                reply_markup=utils.render_keyboard( last_pool )
             )
 
 def button(bot, update):
@@ -193,6 +225,8 @@ def button(bot, update):
     pool = database.pool.find_one({"_id": ObjectId(callback_data['pool_id'])})
     if query.from_user.id not in pool['proposals'][callback_data['index']]['voted_by']: 
         pool['proposals'][callback_data['index']]['voted_by'].append(query.from_user.id)
+        
+        """
         keyboard = [ [] ]
         for index in range(0, len(pool['proposals'])):
             if len(keyboard[len(keyboard)-1]) == 3:
@@ -208,11 +242,13 @@ def button(bot, update):
             )
         
         reply_markup = InlineKeyboardMarkup(keyboard)
+        """
+
         bot.edit_message_text(
             pool['title'], 
             chat_id=query.message.chat.id, 
             message_id=pool['message_id'], 
-            reply_markup=reply_markup
+            reply_markup=utils.render_keyboard( pool )
         )
         database.pool.update_one({"_id": pool['_id']}, {"$set": {'proposals': pool["proposals"]} })
 
