@@ -44,6 +44,16 @@ def get_close_pool(_datetime, hour=0):
     close_datetime = datetime.datetime( _datetime.year, _datetime.month, _datetime.day, hour )
     return close_datetime
 
+def day_to_add(_datetime, day, week_days):
+    if _datetime.weekday() == 0:
+        to_add = week_days.index(day)
+    else:
+        if week_days.index(day) <= _datetime.weekday():
+            to_add = 5 + week_days.index(day)
+        else:
+            to_add = week_days.index(day) - _datetime.weekday()
+    return to_add
+
 """
 def scrape_synonymous(word):
     try:

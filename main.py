@@ -141,11 +141,10 @@ def analyzes_message(bot, update):
                             new_pool['time_value']['pool_day'] = week_days[ (datetime.datetime.now() + datetime.timedelta( days=time_transformers[tags[index].word] )).weekday() ]
                             continue
 
-                        # È sbagliata da fixare!!!
-                        # if tags[index].word in time_pointers:
-                            # new_pool['time_value']['close_datetime'] = utils.get_close_pool( (datetime.datetime.now() + datetime.timedelta( days=time_transformers[ new_pool['time_value']['pool_day'] ] ) ), time_pointers[tags[index].word] )
-                            # new_pool['time_value']['close_datetime'] = utils.get_close_pool( (datetime.datetime.now() + datetime.timedelta( days=week_days.index( new_pool['time_value']['pool_day'] ) ) ), time_pointers[tags[index].word] )
-                            # continue
+                        if tags[index].word in time_pointers:
+                            day_to_add = utils.day_to_add(datetime.datetime.now(), new_pool['time_value']['pool_day'], week_days )
+                            new_pool['time_value']['close_datetime'] = utils.get_close_pool( (datetime.datetime.now() + datetime.timedelta( day_to_add ) ), time_pointers[tags[index].word] )
+                            continue
 
                         # This word is a mean of transport! Set pool_day and ignore the following code.
                         if tags[index].word in means_of_transport: 
@@ -186,18 +185,6 @@ def analyzes_message(bot, update):
             new_pool["proposals"] = [ { "propose": p, "voted_by": [] } for p in proposals ]
         
             database.pool.insert_one( new_pool )
-            
-            """
-            keyboard = [ [] ]
-            for index in range(0, len(proposals)):
-                if len(keyboard[len(keyboard)-1]) == 3:
-                    keyboard.append([])
-
-                callback_data = json.dumps({ 'index': index, 'pool_id': str(new_pool['_id']) })   
-                keyboard[len(keyboard)-1].append( InlineKeyboardButton(proposals[index].capitalize(), callback_data=callback_data) )
-    
-            reply_markup = InlineKeyboardMarkup(keyboard)
-            """
 
             new_pool_message = bot.send_message(update.message.chat_id, new_pool['title'], reply_markup=utils.render_keyboard( new_pool ))
             database.pool.update_one({"_id": new_pool['_id']}, {"$set": {"message_id": new_pool_message.message_id} })
@@ -210,20 +197,6 @@ def analyzes_message(bot, update):
                         "propose": propose, 
                         "voted_by": []
                     })
-
-            # keyboard = [ [] ]
-            # for index in range(0, len(last_pool["proposals"])):
-            #     if len(keyboard[len(keyboard)-1]) == 3:
-            #         keyboard.append([])
-            #     
-            #     callback_data = json.dumps({ 'index': index, 'pool_id': str(last_pool['_id']) })
-            #     keyboard[len(keyboard)-1].append(
-            #         InlineKeyboardButton( 
-            #             "{} {}".format(
-            #                 last_pool["proposals"][index]["propose"].capitalize(), 
-            #                 "" if len(last_pool["proposals"][index]["voted_by"]) == 0 else "({})".format(len(last_pool["proposals"][index]["voted_by"])) 
-            #         ) , callback_data=callback_data ) 
-            #     )
             
             database.pool.update_one({"_id": last_pool['_id']}, {"$set": {'proposals': last_pool["proposals"]} })
             bot.edit_message_text(
@@ -239,24 +212,6 @@ def button(bot, update):
     pool = database.pool.find_one({"_id": ObjectId(callback_data['pool_id'])})
     if query.from_user.id not in pool['proposals'][callback_data['index']]['voted_by']: 
         pool['proposals'][callback_data['index']]['voted_by'].append(query.from_user.id)
-        
-        """
-        keyboard = [ [] ]
-        for index in range(0, len(pool['proposals'])):
-            if len(keyboard[len(keyboard)-1]) == 3:
-                keyboard.append([])
-            
-            callback_data = json.dumps({ 'index': index, 'pool_id': str(pool['_id']) })
-            keyboard[len(keyboard)-1].append(
-                InlineKeyboardButton( 
-                    "{} {}".format(
-                        pool['proposals'][index]["propose"].capitalize(), 
-                        "" if len(pool['proposals'][index]["voted_by"]) == 0 else "({})".format(len(pool['proposals'][index]["voted_by"])) 
-                ) , callback_data=callback_data ) 
-            )
-        
-        reply_markup = InlineKeyboardMarkup(keyboard)
-        """
 
         bot.edit_message_text(
             pool['title'], 
