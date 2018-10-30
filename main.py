@@ -106,7 +106,14 @@ def analyzes_message(bot, update):
     proposals = []
     
     # Default pool day = TODAY
-    new_pool = { "title": None, "closed": False, "pool_day": week_days[datetime.datetime.now().weekday()] } 
+    new_pool = { 
+        "title": None, 
+        "closed": False, 
+        "time_value": {
+            "close_datetime": utils.get_close_pool( (datetime.datetime.now() + datetime.timedelta( days=1 ) ) ),
+            "pool_day": week_days[datetime.datetime.now().weekday()]
+        }
+    } 
     
     for sentence in sentences:
         tags_encoded = tagger.tag_text( sentence )
@@ -125,12 +132,16 @@ def analyzes_message(bot, update):
                         # This word is a day! Set pool_day and ignore the following code.
                         is_day = utils.is_day(tags[index].word, week_days)
                         if is_day != -1:
-                            new_pool['pool_day'] = week_days[is_day]
+                            new_pool['time_value']['pool_day'] = week_days[is_day]
                             continue
 
                         # This word is a time_transformers! Set new pool day ad +1/+2 on today timestamp.
                         if tags[index].word in time_transformers:
-                            new_pool['pool_day'] = week_days[ (datetime.datetime.now() + datetime.timedelta( days=time_transformers[tags[index].word] )).weekday() ]
+                            new_pool['time_value']['pool_day'] = week_days[ (datetime.datetime.now() + datetime.timedelta( days=time_transformers[tags[index].word] )).weekday() ]
+                            continue
+
+                        if tags[index].word in time_pointers:
+                            new_pool['time_value']['close_datetime'] = utils.get_close_pool( (datetime.datetime.now() + datetime.timedelta( days=time_transformers[ new_pool['time_value']['pool_day'] ] ) ), time_pointers[tags[index].word] )
                             continue
 
                         # This word is a mean of transport! Set pool_day and ignore the following code.
@@ -164,7 +175,7 @@ def analyzes_message(bot, update):
                     middle = { 'index': -1, 'status': False }
 
     # There is another pool open in the same day?
-    last_pool = database.pool.find_one({"chat_id": update.message.chat_id, "closed": False, "pool_day": new_pool['pool_day']})
+    last_pool = database.pool.find_one({"chat_id": update.message.chat_id, "closed": False, "time_value.pool_day": new_pool['time_value']['pool_day']})
     if last_pool is None:
         if new_pool['title'] != None:
             new_pool["owner"] = update.message.from_user.id,

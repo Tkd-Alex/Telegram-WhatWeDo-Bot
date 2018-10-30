@@ -7,7 +7,7 @@
 # proxies = open("proxies.txt","r").read().split("\n")
 # headers = {'User-Agent': "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/68.0.3440.84 Safari/537.36"}
 
-import json
+import json, datetime
 from telegram import InlineKeyboardButton, InlineKeyboardMarkup
 
 def good_middle(middle, tags):
@@ -39,6 +39,10 @@ def render_keyboard(pool):
         )
 
     return InlineKeyboardMarkup(keyboard)
+
+def get_close_pool(_datetime, hour=0):
+    close_datetime = datetime.datetime( _datetime.year, _datetime.month, _datetime.day, hour )
+    return close_datetime
 
 """
 def scrape_synonymous(word):
