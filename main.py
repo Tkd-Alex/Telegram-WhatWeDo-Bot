@@ -46,6 +46,7 @@ time_transformers = {
 
 time_pointers = {
     "stasera": 20,
+    "sera": 20,
     "pranzo": 13,
     "cena": 21,
     "colazione": 8
@@ -141,7 +142,8 @@ def analyzes_message(bot, update):
                             continue
 
                         if tags[index].word in time_pointers:
-                            new_pool['time_value']['close_datetime'] = utils.get_close_pool( (datetime.datetime.now() + datetime.timedelta( days=time_transformers[ new_pool['time_value']['pool_day'] ] ) ), time_pointers[tags[index].word] )
+                            # new_pool['time_value']['close_datetime'] = utils.get_close_pool( (datetime.datetime.now() + datetime.timedelta( days=time_transformers[ new_pool['time_value']['pool_day'] ] ) ), time_pointers[tags[index].word] )
+                            new_pool['time_value']['close_datetime'] = utils.get_close_pool( (datetime.datetime.now() + datetime.timedelta( days=week_days.index( new_pool['time_value']['pool_day'] ) ) ), time_pointers[tags[index].word] )
                             continue
 
                         # This word is a mean of transport! Set pool_day and ignore the following code.
