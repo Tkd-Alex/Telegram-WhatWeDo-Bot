@@ -141,10 +141,11 @@ def analyzes_message(bot, update):
                             new_pool['time_value']['pool_day'] = week_days[ (datetime.datetime.now() + datetime.timedelta( days=time_transformers[tags[index].word] )).weekday() ]
                             continue
 
-                        if tags[index].word in time_pointers:
+                        # È sbagliata da fixare!!!
+                        # if tags[index].word in time_pointers:
                             # new_pool['time_value']['close_datetime'] = utils.get_close_pool( (datetime.datetime.now() + datetime.timedelta( days=time_transformers[ new_pool['time_value']['pool_day'] ] ) ), time_pointers[tags[index].word] )
-                            new_pool['time_value']['close_datetime'] = utils.get_close_pool( (datetime.datetime.now() + datetime.timedelta( days=week_days.index( new_pool['time_value']['pool_day'] ) ) ), time_pointers[tags[index].word] )
-                            continue
+                            # new_pool['time_value']['close_datetime'] = utils.get_close_pool( (datetime.datetime.now() + datetime.timedelta( days=week_days.index( new_pool['time_value']['pool_day'] ) ) ), time_pointers[tags[index].word] )
+                            # continue
 
                         # This word is a mean of transport! Set pool_day and ignore the following code.
                         if tags[index].word in means_of_transport: 
