@@ -112,7 +112,8 @@ def analyzes_message(bot, update):
         "closed": False, 
         "time_value": {
             "close_datetime": utils.get_close_pool( (datetime.datetime.now() + datetime.timedelta( days=1 ) ) ),
-            "pool_day": week_days[datetime.datetime.now().weekday()]
+            "pool_day": week_days[datetime.datetime.now().weekday()],
+            "time_pointers": None
         }
     } 
     
@@ -144,6 +145,7 @@ def analyzes_message(bot, update):
                         if tags[index].word in time_pointers:
                             day_to_add = utils.day_to_add(datetime.datetime.now(), new_pool['time_value']['pool_day'], week_days )
                             new_pool['time_value']['close_datetime'] = utils.get_close_pool( (datetime.datetime.now() + datetime.timedelta( day_to_add ) ), time_pointers[tags[index].word] )
+                            new_pool['time_value']['time_pointers']: tags[index].words
                             continue
 
                         # This word is a mean of transport! Set pool_day and ignore the following code.
@@ -177,7 +179,9 @@ def analyzes_message(bot, update):
                     middle = { 'index': -1, 'status': False }
 
     # There is another pool open in the same day?
-    last_pool = database.pool.find_one({"chat_id": update.message.chat_id, "closed": False, "time_value.pool_day": new_pool['time_value']['pool_day']})
+
+    # C'è comunque un problema quando si aggiunge una proposa e ovviamente non è stato specificato il pool_day
+    last_pool = database.pool.find_one({"chat_id": update.message.chat_id, "closed": False, "time_value.pool_day": new_pool['time_value']['pool_day'], "time_value.time_pointers": new_pool['time_value']['time_pointers']})
     if last_pool is None:
         if new_pool['title'] != None:
             new_pool["owner"] = update.message.from_user.id,
@@ -226,8 +230,10 @@ def close_pool(bot, update):
     if pool is None:
         update.message.reply_text('Non hai sondaggi aperti in questo gruppo!')
     else:
-        # Aggiungere chi ha vinto il sonaggio
-        update.message.reply_text('Sondaggio: {}\nChiuso!'.format(pool['title']))
+        sorted_proposals = sorted(pool['proposals'], key=lambda item: len(item['voted_by']) , reversed=True)
+        # Controllare i casi con parità
+        winner, vote = sorted_proposals[0]['propose'], len(sorted_proposals[0]['voted_by'])
+        update.message.reply_text('Sondaggio: {}\nChiuso!\n\nHa vinto: {}\nCon: {} voti!'.format(pool['title'], winner, vote ))
         database.pool.update_one({"_id": pool['_id']}, {"$set": {'closed': True}} )
 
 def error(bot, update, error):
