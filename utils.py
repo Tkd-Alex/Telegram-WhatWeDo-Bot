@@ -40,6 +40,33 @@ def render_keyboard(pool):
 
     return InlineKeyboardMarkup(keyboard)
 
+def create_new_pool(pool, proposals, message, bot, database):
+    pool["owner"] = message.from_user.id,
+    pool["chat_id"] = message.chat_id,
+    pool["proposals"] = [ { "propose": p, "voted_by": [] } for p in proposals ]
+    
+    database.pool.insert_one( pool )
+
+    new_pool_message = bot.send_message(message.chat_id, pool['title'], reply_markup=render_keyboard( pool ))
+    database.pool.update_one({"_id": pool['_id']}, {"$set": {"message_id": new_pool_message.message_id} })
+
+def update_propose(pool, proposals, message, bot, database):
+    if [ p['propose'] for p in pool["proposals"] if p['propose'] in proposals] != proposals:
+        for propose in proposals:
+            if propose not in [ p['propose'] for p in pool["proposals"] ]:
+                pool["proposals"].append({
+                    "propose": propose, 
+                    "voted_by": []
+                })
+        
+        database.pool.update_one({"_id": pool['_id']}, {"$set": {'proposals': pool["proposals"]} })
+        bot.edit_message_text(
+            pool['title'], 
+            chat_id=message.chat_id, 
+            message_id=pool['message_id'], 
+            reply_markup=render_keyboard( pool )
+        )
+
 def get_close_pool(_datetime, hour=0):
     close_datetime = datetime.datetime( _datetime.year, _datetime.month, _datetime.day, hour )
     return close_datetime

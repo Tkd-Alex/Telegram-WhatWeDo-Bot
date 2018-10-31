@@ -28,7 +28,7 @@ logger = logging.getLogger('MAIN')
 nltk.download('punkt')
 
 client = MongoClient()
-database = client[ 'pool_group' ]
+database = client['pool_group']
 
 calendar.setfirstweekday(calendar.MONDAY)
 locale.setlocale(locale.LC_ALL, 'it_IT.utf8')
@@ -37,9 +37,7 @@ week_days = list( calendar.day_name )
 
 means_of_transport = [ p.rstrip() for p in open("mezzi_di_trasporto.txt","r").readlines() ]
 
-# stasera, domani, a pranzo, a cena, dopodomani
-
-time_transformers = {
+day_transformers = {
     "domani": 1,
     "dopodomani": 2
 }
@@ -102,8 +100,17 @@ prepositions = {
     "fra":      False
 }
 
+# Controllare per ogni sentenza se:
+# 1 - È una nuova proposta, dunque non esiste un altro pool relativo allo stesso giorno e stesso orario di chiusura.
+# 2 - Se è una risposta al pool capire a quale pool associarlo:
+#   -   Se nella risposta vi sono parole chiave con giorno o puntatore temporale.
+#   -   Se nella risposta non ci sono parole chiave:
+#       -   Con multipli pool aperti chiedere a quale ci si riferisce.
+#       -   Con un solo pool aperto associarlo direttamente ad esso.
 def analyzes_message(bot, update):
+    # Create multiple sentences by message. nltk maybe split by '.'.
     sentences = nltk.sent_tokenize( update.message.text.lower() )
+
     proposals = []
     
     # Default pool day = TODAY
@@ -117,10 +124,13 @@ def analyzes_message(bot, update):
         }
     } 
     
+    # Iterate sentence.
     for sentence in sentences:
+        # Create an array of word already tagged from [i] sentence
         tags_encoded = tagger.tag_text( sentence )
         tags = treetaggerwrapper.make_tags( tags_encoded )
 
+        # Count all negation in the sentence. If is even skip sentence.
         negations = [ w.word for w in tags if w.word in [ 'non' ] ]
 
         if len(negations) % 2 == 0:
@@ -131,24 +141,27 @@ def analyzes_message(bot, update):
                 if tags[index].pos.startswith(("VER", "NOM")):
 
                     if tags[index].pos.startswith("NOM"):
+
                         # This word is a day! Set pool_day and ignore the following code.
                         is_day = utils.is_day(tags[index].word, week_days)
                         if is_day != -1:
                             new_pool['time_value']['pool_day'] = week_days[is_day]
                             continue
 
-                        # This word is a time_transformers! Set new pool day ad +1/+2 on today timestamp.
-                        if tags[index].word in time_transformers:
-                            new_pool['time_value']['pool_day'] = week_days[ (datetime.datetime.now() + datetime.timedelta( days=time_transformers[tags[index].word] )).weekday() ]
+                        # This word is a day_transformers! Set new pool day ad +1/+2 on today timestamp.
+                        if tags[index].word in day_transformers:
+                            new_pool['time_value']['pool_day'] = week_days[ (datetime.datetime.now() + datetime.timedelta( days=day_transformers[tags[index].word] )).weekday() ]
                             continue
 
+                        # This word is a time pointers like ["pranzo", "cena"]. Set close pool by tome_pointers value.
                         if tags[index].word in time_pointers:
-                            day_to_add = utils.day_to_add(datetime.datetime.now(), new_pool['time_value']['pool_day'], week_days )
-                            new_pool['time_value']['close_datetime'] = utils.get_close_pool( (datetime.datetime.now() + datetime.timedelta( day_to_add ) ), time_pointers[tags[index].word] )
+                            # Le seguenti due righe vanno comunque eseguite anche se il giorno è selezionato di default o comunque non vi è un marcatore temporale ma il giorno è cambiato.
+                            # day_to_add = utils.day_to_add(datetime.datetime.now(), new_pool['time_value']['pool_day'], week_days )
+                            # new_pool['time_value']['close_datetime'] = utils.get_close_pool( (datetime.datetime.now() + datetime.timedelta( day_to_add ) ), time_pointers[tags[index].word] )
                             new_pool['time_value']['time_pointers']: tags[index].words
                             continue
 
-                        # This word is a mean of transport! Set pool_day and ignore the following code.
+                        # This word is a mean of transport! Ignore the following code.
                         if tags[index].word in means_of_transport: 
                             continue
 
@@ -168,7 +181,7 @@ def analyzes_message(bot, update):
                     if propose != None and propose not in proposals:
                         proposals.append(propose)
                 
-                if tags[index].pos.startswith("VER") and tags[index].lemma in [ 'andare', 'fare' ]:
+                if tags[index].pos.startswith("VER") and tags[index].lemma in [ 'andare', 'fare' ] and '?' in sentence:
                     new_pool['title'] = update.message.text
 
                 # Foundend preposition maybe the next word is a 'place' or 'action to do'
@@ -180,9 +193,33 @@ def analyzes_message(bot, update):
 
     # There is another pool open in the same day?
 
-    # C'è comunque un problema quando si aggiunge una proposa e ovviamente non è stato specificato il pool_day
+    if new_pool['title'] != None and database.pool.find_one({
+            "chat_id": update.message.chat_id, 
+            "closed": False, 
+            "time_value.pool_day": new_pool['time_value']['pool_day'], 
+            "time_value.time_pointers": new_pool['time_value']['time_pointers']
+        }) is None:
+            utils.create_new_pool(new_pool, proposals, update.message, bot, database)
+    else:
+        opened_pool = database.pool({"chat_id": update.message.chat_id, "closed": False})
+        opened_pool = list(opened_pool)
+        if len(opened_pool) == 1:
+            utils.update_propose(new_pool, proposals, update.message, bot, database)
+        elif len(opened_pool) > 1:
+            pools = [ 
+                p for p in opened_pool 
+                if p['time_value']['pool_day'] == new_pool['time_value']['pool_day'] 
+                and p['time_value']['time_pointers'] == new_pool['time_value']['time_pointers'] 
+            ]
+            if len(pools) == 1: # I'm sure this is the right pool
+                utils.update_propose(new_pool, proposals, update.message, bot, database)
+            else: # No pools matching ask to user.
+                pass
+
+    """
+    # C'è comunque un problema quando si aggiunge una proposta e ovviamente non è stato specificato il pool_day
     last_pool = database.pool.find_one({"chat_id": update.message.chat_id, "closed": False, "time_value.pool_day": new_pool['time_value']['pool_day'], "time_value.time_pointers": new_pool['time_value']['time_pointers']})
-    if last_pool is None:
+    if last_pool is None:    
         if new_pool['title'] != None:
             new_pool["owner"] = update.message.from_user.id,
             new_pool["chat_id"] = update.message.chat_id,
@@ -194,7 +231,7 @@ def analyzes_message(bot, update):
             database.pool.update_one({"_id": new_pool['_id']}, {"$set": {"message_id": new_pool_message.message_id} })
     else:
         # Foundend open pool and new proposals to add:
-        if [ p['propose'] for p in last_pool["proposals"] if p['propose'] in proposals]  != proposals:
+        if [ p['propose'] for p in last_pool["proposals"] if p['propose'] in proposals] != proposals:
             for propose in proposals:
                 if propose not in [ p['propose'] for p in last_pool["proposals"] ]:
                     last_pool["proposals"].append({
@@ -209,6 +246,7 @@ def analyzes_message(bot, update):
                 message_id=last_pool['message_id'], 
                 reply_markup=utils.render_keyboard( last_pool )
             )
+    """
 
 def button(bot, update):
     query = update.callback_query
