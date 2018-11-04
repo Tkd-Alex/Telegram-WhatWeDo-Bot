@@ -33,7 +33,6 @@ def ask_pool(pending_propose):
     for index in range(0, len(pending_propose['pools'])):
         keyboard.append([])
         callback_data = json.dumps({ STRUCT_CALLBACK['TYPE']: BUTTON_TYPE['CHOICE'], STRUCT_CALLBACK['INDEX']: index, STRUCT_CALLBACK['ID']: str(pending_propose['_id']) })
-        print(callback_data)
         keyboard[len(keyboard)-1].append( InlineKeyboardButton(pending_propose['pools'][index]['title'] , callback_data=callback_data ))
     return InlineKeyboardMarkup(keyboard)
 

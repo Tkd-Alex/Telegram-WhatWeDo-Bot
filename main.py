@@ -222,7 +222,9 @@ def analyzes_message(bot, update):
                     "from_user": update.message.from_user.id,
                 }
                 database.pending_propose.insert_one( pending_propose )
-                update.message.reply_text("Scusami a quale sondaggio ti riferisci?", reply_markup=utils.ask_pool(pending_propose))
+                question_pool_message = update.message.reply_text("Scusami a quale sondaggio ti riferisci?", reply_markup=utils.ask_pool(pending_propose))
+                database.pending_propose.update_one({"_id": pending_propose['_id']}, {"$set": {"message_id": question_pool_message.message_id} })
+
 
 def button(bot, update):
     query = update.callback_query
@@ -244,13 +246,14 @@ def button(bot, update):
         if query.from_user.id == pending_propose['from_user']:
             pool = database.pool.find_one({"_id": ObjectId( pending_propose['pools'][callback_data[utils.STRUCT_CALLBACK['INDEX']]]['_id'] )})
             utils.update_propose(pool, pending_propose['proposals'], query.message.chat.id, bot, database)
+            bot.delete_message(query.message.chat.id, pending_propose['message_id'])
 
 def close_pool(bot, update):
     pool = database.pool.find_one({"chat_id": update.message.chat_id, "closed": False, "owner": update.message.from_user.id})
     if pool is None:
         update.message.reply_text('Non hai sondaggi aperti in questo gruppo!')
     else:
-        sorted_proposals = sorted(pool['proposals'], key=lambda item: len(item['voted_by']) , reversed=True)
+        sorted_proposals = sorted(pool['proposals'], key=lambda item: len(item['voted_by']), reverse=True)
         # Controllare i casi con parità
         winner, vote = sorted_proposals[0]['propose'], len(sorted_proposals[0]['voted_by'])
         update.message.reply_text('Sondaggio: {}\nChiuso!\n\nHa vinto: {}\nCon: {} voti!'.format(pool['title'], winner, vote ))
