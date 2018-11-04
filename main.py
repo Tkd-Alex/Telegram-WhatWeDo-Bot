@@ -114,7 +114,7 @@ def analyzes_message(bot, update):
 
     proposals = []
     
-    # Default pool day = TODAY
+    default_value = True
     new_pool = { 
         "title": None, 
         "closed": False, 
@@ -141,6 +141,7 @@ def analyzes_message(bot, update):
                 
                 # This word is a day_transformers! Set new pool day ad +1/+2 on today timestamp.
                 if tags[index].pos.startswith("ADV") and tags[index].word in day_transformers:
+                    default_value = False
                     new_pool['time_value']['pool_day'] = week_days[ (datetime.datetime.now() + datetime.timedelta( days=day_transformers[tags[index].word] )).weekday() ]
                     continue
 
@@ -156,6 +157,7 @@ def analyzes_message(bot, update):
 
                         # This word is a time pointers like ["pranzo", "cena"]. Set close pool by tome_pointers value.
                         if tags[index].word in time_pointers:
+                            default_value = False
                             new_pool['time_value']['time_pointers'] = tags[index].word
                             continue
 
@@ -200,36 +202,48 @@ def analyzes_message(bot, update):
             "time_value.time_pointers": new_pool['time_value']['time_pointers']
         }) is None:
             utils.create_new_pool(new_pool, proposals, update.message, bot, database)
-    else:
+    elif proposals != []:
         opened_pool = database.pool.find({"chat_id": update.message.chat_id, "closed": False})
         opened_pool = list(opened_pool)
         if len(opened_pool) == 1:
-            utils.update_propose(opened_pool[0], proposals, update.message, bot, database)
+            utils.update_propose(opened_pool[0], proposals, update.message.chat_id, bot, database)
         elif len(opened_pool) > 1:
             pools = [ 
                 p for p in opened_pool 
                 if p['time_value']['pool_day'] == new_pool['time_value']['pool_day'] 
                 and p['time_value']['time_pointers'] == new_pool['time_value']['time_pointers'] 
             ]
-            if len(pools) == 1: # I'm sure this is the right pool
-                utils.update_propose(pools[0], proposals, update.message, bot, database)
-            else: # No pools matching ask to user.
-                print("Non so a chi assegnare questo pool")
+            if len(pools) == 1 and default_value is False: # I'm sure this is the right pool
+                utils.update_propose(pools[0], proposals, update.message.chat_id, bot, database)
+            else:
+                pending_propose = {
+                    "pools": [ {"title": p['title'], "_id": p['_id']} for p in opened_pool ],
+                    "proposals": proposals, 
+                    "from_user": update.message.from_user.id,
+                }
+                database.pending_propose.insert_one( pending_propose )
+                update.message.reply_text("Scusami a quale sondaggio ti riferisci?", reply_markup=utils.ask_pool(pending_propose))
 
 def button(bot, update):
     query = update.callback_query
     callback_data = json.loads(query.data)
-    pool = database.pool.find_one({"_id": ObjectId(callback_data['pool_id'])})
-    if query.from_user.id not in pool['proposals'][callback_data['index']]['voted_by']: 
-        pool['proposals'][callback_data['index']]['voted_by'].append(query.from_user.id)
+    if callback_data[utils.STRUCT_CALLBACK['TYPE']] == utils.BUTTON_TYPE['VOTE']:
+        pool = database.pool.find_one({"_id": ObjectId(callback_data[utils.STRUCT_CALLBACK['ID']])})
+        if query.from_user.id not in pool['proposals'][callback_data[utils.STRUCT_CALLBACK['INDEX']]]['voted_by']: 
+            pool['proposals'][callback_data[utils.STRUCT_CALLBACK['INDEX']]]['voted_by'].append(query.from_user.id)
 
-        bot.edit_message_text(
-            pool['title'], 
-            chat_id=query.message.chat.id, 
-            message_id=pool['message_id'], 
-            reply_markup=utils.render_keyboard( pool )
-        )
-        database.pool.update_one({"_id": pool['_id']}, {"$set": {'proposals': pool["proposals"]} })
+            bot.edit_message_text(
+                pool['title'], 
+                chat_id=query.message.chat.id, 
+                message_id=pool['message_id'], 
+                reply_markup=utils.render_keyboard( pool )
+            )
+            database.pool.update_one({"_id": pool['_id']}, {"$set": {'proposals': pool["proposals"]} })
+    elif callback_data[utils.STRUCT_CALLBACK['TYPE']] == utils.BUTTON_TYPE['CHOICE']:
+        pending_propose = database.pending_propose.find_one({"_id": ObjectId(callback_data[utils.STRUCT_CALLBACK['ID']])})
+        if query.from_user.id == pending_propose['from_user']:
+            pool = database.pool.find_one({"_id": ObjectId( pending_propose['pools'][callback_data[utils.STRUCT_CALLBACK['INDEX']]]['_id'] )})
+            utils.update_propose(pool, pending_propose['proposals'], query.message.chat.id, bot, database)
 
 def close_pool(bot, update):
     pool = database.pool.find_one({"chat_id": update.message.chat_id, "closed": False, "owner": update.message.from_user.id})

@@ -1,14 +1,19 @@
 #!/usr/bin/python3
 # -*- coding: utf-8 -*-
 
-# import requests, wikipediaapi, random, time
-# from bs4 import BeautifulSoup
-
-# proxies = open("proxies.txt","r").read().split("\n")
-# headers = {'User-Agent': "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/68.0.3440.84 Safari/537.36"}
-
 import json, datetime
 from telegram import InlineKeyboardButton, InlineKeyboardMarkup
+
+BUTTON_TYPE = {
+    "CHOICE": 1,
+    "VOTE": 2
+}
+
+STRUCT_CALLBACK = {
+    "TYPE": "0",
+    "INDEX": "1",
+    "ID": "2"
+}
 
 def good_middle(middle, tags):
     if middle['index']-1 < 0:
@@ -23,13 +28,22 @@ def is_day(word, week_days):
             return index
     return -1
 
+def ask_pool(pending_propose):
+    keyboard = [ ]
+    for index in range(0, len(pending_propose['pools'])):
+        keyboard.append([])
+        callback_data = json.dumps({ STRUCT_CALLBACK['TYPE']: BUTTON_TYPE['CHOICE'], STRUCT_CALLBACK['INDEX']: index, STRUCT_CALLBACK['ID']: str(pending_propose['_id']) })
+        print(callback_data)
+        keyboard[len(keyboard)-1].append( InlineKeyboardButton(pending_propose['pools'][index]['title'] , callback_data=callback_data ))
+    return InlineKeyboardMarkup(keyboard)
+
 def render_keyboard(pool):
     keyboard = [ [] ]
     for index in range(0, len(pool["proposals"])):
         if len(keyboard[len(keyboard)-1]) == 3:
             keyboard.append([])
 
-        callback_data = json.dumps({ 'index': index, 'pool_id': str(pool['_id']) })
+        callback_data = json.dumps({ STRUCT_CALLBACK['TYPE']: BUTTON_TYPE['VOTE'], STRUCT_CALLBACK['INDEX']: index, STRUCT_CALLBACK['ID']: str(pool['_id']) })
         keyboard[len(keyboard)-1].append(
             InlineKeyboardButton( 
                 "{} {}".format(
@@ -50,7 +64,7 @@ def create_new_pool(pool, proposals, message, bot, database):
     new_pool_message = bot.send_message(message.chat_id, pool['title'], reply_markup=render_keyboard( pool ))
     database.pool.update_one({"_id": pool['_id']}, {"$set": {"message_id": new_pool_message.message_id} })
 
-def update_propose(pool, proposals, message, bot, database):
+def update_propose(pool, proposals, chat_id, bot, database):
     if [ p['propose'] for p in pool["proposals"] if p['propose'] in proposals] != proposals:
         for propose in proposals:
             if propose not in [ p['propose'] for p in pool["proposals"] ]:
@@ -62,7 +76,7 @@ def update_propose(pool, proposals, message, bot, database):
         database.pool.update_one({"_id": pool['_id']}, {"$set": {'proposals': pool["proposals"]} })
         bot.edit_message_text(
             pool['title'], 
-            chat_id=message.chat_id, 
+            chat_id=chat_id, 
             message_id=pool['message_id'], 
             reply_markup=render_keyboard( pool )
         )
