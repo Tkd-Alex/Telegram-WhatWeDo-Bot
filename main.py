@@ -47,7 +47,8 @@ time_pointers = {
     "sera": 20,
     "pranzo": 13,
     "cena": 21,
-    "colazione": 8
+    "colazione": 8,
+    "oggi": 0
 }
 
 prepositions = {
@@ -120,7 +121,7 @@ def analyzes_message(bot, update):
         "time_value": {
             "close_datetime": utils.get_close_pool( (datetime.datetime.now() + datetime.timedelta( days=1 ) ) ),
             "pool_day": week_days[datetime.datetime.now().weekday()],
-            "time_pointers": None
+            "time_pointers": "oggi"
         }
     } 
     
@@ -137,6 +138,11 @@ def analyzes_message(bot, update):
             middle = { 'index': -1, 'status': False }
             for index in range(0, len(tags)):
                 print(tags[index])
+                
+                # This word is a day_transformers! Set new pool day ad +1/+2 on today timestamp.
+                if tags[index].pos.startswith("ADV") and tags[index].word in day_transformers:
+                    new_pool['time_value']['pool_day'] = week_days[ (datetime.datetime.now() + datetime.timedelta( days=day_transformers[tags[index].word] )).weekday() ]
+                    continue
 
                 if tags[index].pos.startswith(("VER", "NOM")):
 
@@ -148,17 +154,9 @@ def analyzes_message(bot, update):
                             new_pool['time_value']['pool_day'] = week_days[is_day]
                             continue
 
-                        # This word is a day_transformers! Set new pool day ad +1/+2 on today timestamp.
-                        if tags[index].word in day_transformers:
-                            new_pool['time_value']['pool_day'] = week_days[ (datetime.datetime.now() + datetime.timedelta( days=day_transformers[tags[index].word] )).weekday() ]
-                            continue
-
                         # This word is a time pointers like ["pranzo", "cena"]. Set close pool by tome_pointers value.
                         if tags[index].word in time_pointers:
-                            # Le seguenti due righe vanno comunque eseguite anche se il giorno è selezionato di default o comunque non vi è un marcatore temporale ma il giorno è cambiato.
-                            # day_to_add = utils.day_to_add(datetime.datetime.now(), new_pool['time_value']['pool_day'], week_days )
-                            # new_pool['time_value']['close_datetime'] = utils.get_close_pool( (datetime.datetime.now() + datetime.timedelta( day_to_add ) ), time_pointers[tags[index].word] )
-                            new_pool['time_value']['time_pointers']: tags[index].words
+                            new_pool['time_value']['time_pointers'] = tags[index].word
                             continue
 
                         # This word is a mean of transport! Ignore the following code.
@@ -173,7 +171,7 @@ def analyzes_message(bot, update):
                     
                     if tags[index].lemma != "andare" and propose is None:
                         if index+1 < len(tags):
-                            if tags[index+1].pos.startswith("NOM"):
+                            if tags[index+1].pos.startswith("NOM") and not tags[index].pos.startswith("NOM"):
                                 propose = "{} {}".format(tags[index].word, tags[index+1].word)
                         elif not tags[index].pos.startswith("NOM"):
                             propose = tags[index].word
@@ -185,14 +183,16 @@ def analyzes_message(bot, update):
                     new_pool['title'] = update.message.text
 
                 # Foundend preposition maybe the next word is a 'place' or 'action to do'
-                if  tags[index].pos.startswith("DET") or (tags[index].pos.startswith("PRE") and tags[index].lemma in prepositions and prepositions[tags[index].lemma] is True):
+                if tags[index].pos.startswith("DET") or (tags[index].pos.startswith("PRE") and tags[index].lemma in prepositions and prepositions[tags[index].lemma] is True):
                     middle['status'] = True 
                     middle['index'] = index
                 else:
                     middle = { 'index': -1, 'status': False }
 
-    # There is another pool open in the same day?
+    day_to_add = utils.day_to_add(datetime.datetime.now(), new_pool['time_value']['pool_day'], week_days )
+    new_pool['time_value']['close_datetime'] = utils.get_close_pool( (datetime.datetime.now() + datetime.timedelta( day_to_add ) ), time_pointers[new_pool['time_value']['time_pointers']] )                        
 
+    # There is another pool open in the same day?
     if new_pool['title'] != None and database.pool.find_one({
             "chat_id": update.message.chat_id, 
             "closed": False, 
@@ -201,10 +201,10 @@ def analyzes_message(bot, update):
         }) is None:
             utils.create_new_pool(new_pool, proposals, update.message, bot, database)
     else:
-        opened_pool = database.pool({"chat_id": update.message.chat_id, "closed": False})
+        opened_pool = database.pool.find({"chat_id": update.message.chat_id, "closed": False})
         opened_pool = list(opened_pool)
         if len(opened_pool) == 1:
-            utils.update_propose(new_pool, proposals, update.message, bot, database)
+            utils.update_propose(opened_pool[0], proposals, update.message, bot, database)
         elif len(opened_pool) > 1:
             pools = [ 
                 p for p in opened_pool 
@@ -212,41 +212,9 @@ def analyzes_message(bot, update):
                 and p['time_value']['time_pointers'] == new_pool['time_value']['time_pointers'] 
             ]
             if len(pools) == 1: # I'm sure this is the right pool
-                utils.update_propose(new_pool, proposals, update.message, bot, database)
+                utils.update_propose(pools[0], proposals, update.message, bot, database)
             else: # No pools matching ask to user.
-                pass
-
-    """
-    # C'è comunque un problema quando si aggiunge una proposta e ovviamente non è stato specificato il pool_day
-    last_pool = database.pool.find_one({"chat_id": update.message.chat_id, "closed": False, "time_value.pool_day": new_pool['time_value']['pool_day'], "time_value.time_pointers": new_pool['time_value']['time_pointers']})
-    if last_pool is None:    
-        if new_pool['title'] != None:
-            new_pool["owner"] = update.message.from_user.id,
-            new_pool["chat_id"] = update.message.chat_id,
-            new_pool["proposals"] = [ { "propose": p, "voted_by": [] } for p in proposals ]
-        
-            database.pool.insert_one( new_pool )
-
-            new_pool_message = bot.send_message(update.message.chat_id, new_pool['title'], reply_markup=utils.render_keyboard( new_pool ))
-            database.pool.update_one({"_id": new_pool['_id']}, {"$set": {"message_id": new_pool_message.message_id} })
-    else:
-        # Foundend open pool and new proposals to add:
-        if [ p['propose'] for p in last_pool["proposals"] if p['propose'] in proposals] != proposals:
-            for propose in proposals:
-                if propose not in [ p['propose'] for p in last_pool["proposals"] ]:
-                    last_pool["proposals"].append({
-                        "propose": propose, 
-                        "voted_by": []
-                    })
-            
-            database.pool.update_one({"_id": last_pool['_id']}, {"$set": {'proposals': last_pool["proposals"]} })
-            bot.edit_message_text(
-                last_pool['title'], 
-                chat_id=update.message.chat_id, 
-                message_id=last_pool['message_id'], 
-                reply_markup=utils.render_keyboard( last_pool )
-            )
-    """
+                print("Non so a chi assegnare questo pool")
 
 def button(bot, update):
     query = update.callback_query
