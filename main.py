@@ -253,10 +253,17 @@ def close_pool(bot, update):
     if pool is None:
         update.message.reply_text('Non hai sondaggi aperti in questo gruppo!')
     else:
+        close_message = "Il sondaggio: <i>{}</i>\nè stato chiuso!\n\n".format(pool['title'])
         sorted_proposals = sorted(pool['proposals'], key=lambda item: len(item['voted_by']), reverse=True)
-        # Controllare i casi con parità
-        winner, vote = sorted_proposals[0]['propose'], len(sorted_proposals[0]['voted_by'])
-        update.message.reply_text('Sondaggio: {}\nChiuso!\n\nHa vinto: {}\nCon: {} voti!'.format(pool['title'], winner, vote ))
+        winners = [ w for w in sorted_proposals if len(sorted_proposals[0]['voted_by']) ==  len(w['voted_by']) ]
+        if len(winners) == 1:
+            close_message += "Ha vinto: <i>{}</i> , con <b>{}</b> {}!".format(winners[0]['propose'], len(winners[0]['voted_by']), "voti" if len(winners[0]['voted_by']) > 1 else "voto" )
+        else:
+            close_message += "Con <b>{}</b> {} vincono:\n".format(len(winners[0]['voted_by']), "voti" if len(winners[0]['voted_by']) > 1 else "voto")
+            for winner in winners:
+                close_message += "- <i>{}</i>\n".format(winner['propose'].capitalize())
+
+        update.message.reply_text(close_message, parse_mode="HTML")
         database.pool.update_one({"_id": pool['_id']}, {"$set": {'closed': True}} )
 
 def error(bot, update, error):
