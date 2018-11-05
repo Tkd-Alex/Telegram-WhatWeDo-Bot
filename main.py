@@ -225,7 +225,6 @@ def analyzes_message(bot, update):
                 question_pool_message = update.message.reply_text("Scusami a quale sondaggio ti riferisci?", reply_markup=utils.ask_pool(pending_propose))
                 database.pending_propose.update_one({"_id": pending_propose['_id']}, {"$set": {"message_id": question_pool_message.message_id} })
 
-
 def button(bot, update):
     query = update.callback_query
     callback_data = json.loads(query.data)
@@ -248,23 +247,36 @@ def button(bot, update):
             utils.update_propose(pool, pending_propose['proposals'], query.message.chat.id, bot, database)
             bot.delete_message(query.message.chat.id, pending_propose['message_id'])
 
+def handle_close_pool(pool, bot):
+    close_message = "Il sondaggio: <i>{}</i>\nè stato chiuso!\n\n".format(pool['title'])
+    sorted_proposals = sorted(pool['proposals'], key=lambda item: len(item['voted_by']), reverse=True)
+    winners = [ w for w in sorted_proposals if len(sorted_proposals[0]['voted_by']) ==  len(w['voted_by']) ]
+    if len(winners) == 1:
+        close_message += "Ha vinto: <i>{}</i> , con <b>{}</b> {}!".format(winners[0]['propose'], len(winners[0]['voted_by']), "voti" if len(winners[0]['voted_by']) > 1 else "voto" )
+    else:
+        close_message += "Con <b>{}</b> {} vincono:\n".format(len(winners[0]['voted_by']), "voti" if len(winners[0]['voted_by']) > 1 else "voto")
+        for winner in winners:
+            close_message += "- <i>{}</i>\n".format(winner['propose'].capitalize())
+
+    bot.send_message(pool['chat_id'], close_message, parse_mode="HTML")
+    database.pool.update_one({"_id": pool['_id']}, {"$set": {'closed': True}} )
+
 def close_pool(bot, update):
     pool = database.pool.find_one({"chat_id": update.message.chat_id, "closed": False, "owner": update.message.from_user.id})
     if pool is None:
         update.message.reply_text('Non hai sondaggi aperti in questo gruppo!')
     else:
-        close_message = "Il sondaggio: <i>{}</i>\nè stato chiuso!\n\n".format(pool['title'])
-        sorted_proposals = sorted(pool['proposals'], key=lambda item: len(item['voted_by']), reverse=True)
-        winners = [ w for w in sorted_proposals if len(sorted_proposals[0]['voted_by']) ==  len(w['voted_by']) ]
-        if len(winners) == 1:
-            close_message += "Ha vinto: <i>{}</i> , con <b>{}</b> {}!".format(winners[0]['propose'], len(winners[0]['voted_by']), "voti" if len(winners[0]['voted_by']) > 1 else "voto" )
-        else:
-            close_message += "Con <b>{}</b> {} vincono:\n".format(len(winners[0]['voted_by']), "voti" if len(winners[0]['voted_by']) > 1 else "voto")
-            for winner in winners:
-                close_message += "- <i>{}</i>\n".format(winner['propose'].capitalize())
+        handle_close_pool(pool, bot)
 
-        update.message.reply_text(close_message, parse_mode="HTML")
-        database.pool.update_one({"_id": pool['_id']}, {"$set": {'closed': True}} )
+def tick_pool(bot, job):
+    pools = database.pool.find({
+        "time_value.time_pointers": job.context,
+        "time_value.pool_day": week_days[datetime.datetime.now().weekday()], # Force database params. Not necessary.
+        "time_value.close_datetime": utils.get_close_pool(datetime.datetime.now(), time_pointers[job.context])
+    })
+    pools = list(pools)
+    for pool in pools:
+        handle_close_pool(pool, bot)
 
 def error(bot, update, error):
     logger.error('Update "%s" caused error "%s"' % (update, error))
@@ -272,6 +284,14 @@ def error(bot, update, error):
 if __name__ == '__main__':
     updater = Updater(token, request_kwargs={'read_timeout': 20, 'connect_timeout': 20})
     dp = updater.dispatcher
+    job = updater.job_queue
+    for pointer in time_pointers:
+        job.run_daily(
+            tick_pool, 
+            datetime.time(time_pointers[pointer], 00, 00), 
+            context=pointer,
+            name='POOL TICK {}:00 - {}'.format(time_pointers[pointer], pointer.capitalize())
+        )
     dp.add_handler(CommandHandler("close_pool", close_pool))
     dp.add_handler(MessageHandler(Filters.text, analyzes_message))
     dp.add_handler(CallbackQueryHandler(button))

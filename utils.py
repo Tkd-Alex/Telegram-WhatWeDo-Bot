@@ -54,8 +54,8 @@ def render_keyboard(pool):
     return InlineKeyboardMarkup(keyboard)
 
 def create_new_pool(pool, proposals, message, bot, database):
-    pool["owner"] = message.from_user.id,
-    pool["chat_id"] = message.chat_id,
+    pool["owner"] = message.from_user.id
+    pool["chat_id"] = message.chat_id
     pool["proposals"] = [ { "propose": p, "voted_by": [] } for p in proposals ]
     
     database.pool.insert_one( pool )
