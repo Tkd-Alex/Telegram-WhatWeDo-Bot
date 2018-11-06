@@ -240,6 +240,9 @@ def button(bot, update):
                 reply_markup=utils.render_keyboard( pool )
             )
             database.pool.update_one({"_id": pool['_id']}, {"$set": {'proposals': pool["proposals"]} })
+    elif callback_data[utils.STRUCT_CALLBACK['TYPE']] == utils.BUTTON_TYPE['CLOSE']:
+        pool = database.pool.find_one({"_id": ObjectId(callback_data[utils.STRUCT_CALLBACK['ID']])})
+        handle_close_pool(pool, bot)
     elif callback_data[utils.STRUCT_CALLBACK['TYPE']] == utils.BUTTON_TYPE['CHOICE']:
         pending_propose = database.pending_propose.find_one({"_id": ObjectId(callback_data[utils.STRUCT_CALLBACK['ID']])})
         if query.from_user.id == pending_propose['from_user']:
@@ -263,11 +266,14 @@ def handle_close_pool(pool, bot):
 
 # Quale pool vuoi chiudere?
 def close_pool(bot, update):
-    pool = database.pool.find_one({"chat_id": update.message.chat_id, "closed": False, "owner": update.message.from_user.id})
-    if pool is None:
+    pools = database.pool.find({"chat_id": update.message.chat_id, "closed": False, "owner": update.message.from_user.id})
+    pools = list(pools)
+    if pools == []:
         update.message.reply_text('Non hai sondaggi aperti in questo gruppo!')
+    elif len(pools) == 1:
+        handle_close_pool(pools[0], bot)
     else:
-        handle_close_pool(pool, bot)
+        update.message.reply_text("Sembra ci siano più sondaggi aperti. A quale ti riferisci?", reply_markup=utils.pools_to_close())
 
 def tick_pool(bot, job):
     pools = database.pool.find({

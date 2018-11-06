@@ -28,6 +28,14 @@ def is_day(word, week_days):
             return index
     return -1
 
+def pools_to_close(pools):
+    keyboard = [ ]
+    for index in range(0, len(pools)):
+        keyboard.append([])
+        callback_data = json.dumps({ STRUCT_CALLBACK['TYPE']: BUTTON_TYPE['CLOSE'], STRUCT_CALLBACK['ID']: str(pools[index]['_id']) })
+        keyboard[len(keyboard)-1].append( InlineKeyboardButton(pools[index]['title'] , callback_data=callback_data ))
+    return InlineKeyboardMarkup(keyboard)
+
 def ask_pool(pending_propose):
     keyboard = [ ]
     for index in range(0, len(pending_propose['pools'])):
