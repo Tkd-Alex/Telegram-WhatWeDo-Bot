@@ -10,6 +10,9 @@ class ProposeManager():
         self.daymanager = DayManager()
         self.database = client['pool_group']
 
+    def get_propose(self, _id):
+        return self.database.pending_propose.find_one({"_id": ObjectId(_id)})        
+
     def new_propose(self, proposedict):
         self.database.pending_propose.insert_one( proposedict )
         return proposedict['_id']

@@ -1,7 +1,7 @@
 from pymongo import MongoClient
 from bson import ObjectId
 from DayManager import DayManager
-from pointers import time_pointers, day_transformers
+from support_object import time_pointers, day_transformers
 
 class PoolManager():
     
@@ -20,6 +20,9 @@ class PoolManager():
                 "time_pointers": "oggi"
             }
         }
+
+    def get_pool(self, _id):
+        return database.pool.find_one({"_id": ObjectId(_id)})
 
     def close_pool(self, _id):
         self.database.pool.update_one({"_id": _id}, {"$set": {'closed': True}} )

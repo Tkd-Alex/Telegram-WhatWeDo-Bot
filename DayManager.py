@@ -1,5 +1,5 @@
 import locale, calendar, datetime
-from pointers import time_pointers, day_transformers
+from support_object import time_pointers, day_transformers
 
 class DayManager():
     calendar.setfirstweekday(calendar.MONDAY)
@@ -32,7 +32,7 @@ class DayManager():
     def add_day(self, day=1):
         return datetime.datetime.now() + datetime.timedelta( days=day ) 
 
-    def get_close_pool(self, _datetime=datetime.datetime.now(), hour=0, day=0):
+    def get_close_pool(self, _datetime=datetime.datetime.now(), hour=0):
         return datetime.datetime( _datetime.year, _datetime.month, _datetime.day, hour )
     
     def is_day(self, word):
