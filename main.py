@@ -273,7 +273,7 @@ def close_pool(bot, update):
     elif len(pools) == 1:
         handle_close_pool(pools[0], bot)
     else:
-        update.message.reply_text("Sembra ci siano più sondaggi aperti. A quale ti riferisci?", reply_markup=utils.pools_to_close())
+        update.message.reply_text("Sembra ci siano più sondaggi aperti. A quale ti riferisci?", reply_markup=utils.pools_to_close(pools))
 
 def tick_pool(bot, job):
     pools = database.pool.find({
