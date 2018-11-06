@@ -16,7 +16,7 @@ class DayManager():
         return None
 
     def get_today(self):
-        return self.week_days[datetime.datetime.now().weekday()]
+        return self.week_days[datetime.datetime.now().weekday()]   
 
     def day_to_add(self, _datetime, day):
         if _datetime.weekday() == 0:
@@ -29,7 +29,10 @@ class DayManager():
             else:
                 return self.week_days.index(day) - _datetime.weekday()
     
-    def get_close_pool(self, _datetime=datetime.datetime.now(), hour=0):
+    def add_day(self, day=1):
+        return datetime.datetime.now() + datetime.timedelta( days=day ) 
+
+    def get_close_pool(self, _datetime=datetime.datetime.now(), hour=0, day=0):
         return datetime.datetime( _datetime.year, _datetime.month, _datetime.day, hour )
     
     def is_day(self, word):
