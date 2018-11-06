@@ -19,6 +19,7 @@ class PoolManager():
                 "pool_day": self.daymanager.get_today(),
                 "time_pointers": "oggi"
             }
+        }
 
     def close_pool(self, _id):
         self.database.pool.update_one({"_id": _id}, {"$set": {'closed': True}} )
