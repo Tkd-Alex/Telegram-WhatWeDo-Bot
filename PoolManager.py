@@ -10,6 +10,16 @@ class PoolManager():
         self.daymanager = DayManager()
         self.database = client['pool_group']
 
+    def init_pool(self):
+        return {
+            "title": None, 
+            "closed": False, 
+            "time_value": {
+                "close_datetime": self.daymanager.get_close_pool( self.daymanager.add_day() ),
+                "pool_day": self.daymanager.get_today(),
+                "time_pointers": "oggi"
+            }
+
     def close_pool(self, _id):
         self.database.pool.update_one({"_id": _id}, {"$set": {'closed': True}} )
 
