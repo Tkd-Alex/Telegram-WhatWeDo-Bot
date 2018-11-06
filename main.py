@@ -261,6 +261,7 @@ def handle_close_pool(pool, bot):
     bot.send_message(pool['chat_id'], close_message, parse_mode="HTML")
     database.pool.update_one({"_id": pool['_id']}, {"$set": {'closed': True}} )
 
+# Quale pool vuoi chiudere?
 def close_pool(bot, update):
     pool = database.pool.find_one({"chat_id": update.message.chat_id, "closed": False, "owner": update.message.from_user.id})
     if pool is None:
