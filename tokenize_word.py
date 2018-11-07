@@ -6,7 +6,7 @@ from __future__ import unicode_literals
 import warnings
 warnings.simplefilter(action='ignore', category=FutureWarning)
 
-import treetaggerwrapper, re, nltk, utils, wikipediaapi, time, random, threading, pickle
+import treetaggerwrapper, re, nltk, utils, wikipediaapi, time, random, threading, pickle, json
 from joblib import Parallel, delayed
 from datetime import datetime
 from pprint import pprint
@@ -39,6 +39,21 @@ def update_word(word, index, total):
     except Exception as e:
         print("There was an error during update_word: {}".format(e))
 
+def tokenize_word(item, entities, index, total):
+	try:
+		item_entities = []
+		for i in entities:
+			for entity in entities[i]:
+				if entity in item['summary'].lower():
+					if i not in item_entities: 
+						item_entities.append(i)
+		if 'entities' in item:
+			item_entities = list( set (item_entities + item['entities'] ) )
+		database.words.update_one({"_id": item['_id']}, {"$set": {"entities": item_entities} })
+		print("[{}/{}] COMPLETE".format(index+1, total), datetime.now().strftime('%Y/%m/%d %H:%M:%S'), item['word'])
+	except Exception as e:
+		print("There was an error during tokening: {}".format(e))		
+
 """
 # Join all .txt dicionaries
 dictionary = []
@@ -69,6 +84,7 @@ Parallel(n_jobs=150, backend="threading")( delayed(update_word)(dictionary[index
 # Remove all words with empty summary
 # database.words.remove({"summary": ""})
 
+"""
 summaries = ' '.join( [ w['summary'].lower() for w in database.words.find({}) ] ) # Join all summaries
 summaries = summaries.replace('\n', ' ').replace('\t', ' ') # Remove new lines and tabulation
 summaries = re.sub(r'[^\w]', ' ', summaries) # Remove special char
@@ -92,3 +108,10 @@ wordcounts_lower = sorted(wordcounts_lower, key=lambda x: x['occurency'], revers
 pickle.dump(wordcounts_lower, open('wordcounts_lower.pkl', 'wb'))
 
 # wordcounts_lower = pickle.load(open('wordcounts_lower.pkl', 'rb'))
+"""
+
+with open('target_word_check.json') as f:
+    entities = json.load(f)
+items = list( database.words.find({}) )
+# tokenize_word(items[0], entities, 0, 1)
+Parallel(n_jobs=50, backend="threading")( delayed(tokenize_word)(items[index], entities, index, len(items)) for index in range(0, len(items)) )
