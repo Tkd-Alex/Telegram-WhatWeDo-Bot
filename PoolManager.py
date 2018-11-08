@@ -22,7 +22,7 @@ class PoolManager():
         }
 
     def get_pool(self, _id):
-        return database.pool.find_one({"_id": ObjectId(_id)})
+        return self.database.pool.find_one({"_id": ObjectId(_id)})
 
     def close_pool(self, _id):
         self.database.pool.update_one({"_id": _id}, {"$set": {'closed': True}} )

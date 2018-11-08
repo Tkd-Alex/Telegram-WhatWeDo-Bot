@@ -1,7 +1,7 @@
 from pymongo import MongoClient
 from bson import ObjectId
 from DayManager import DayManager
-from pointers import time_pointers, day_transformers
+from support_object import time_pointers, day_transformers
 
 class ProposeManager():
     
