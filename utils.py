@@ -7,7 +7,11 @@ from telegram import InlineKeyboardButton, InlineKeyboardMarkup
 BUTTON_TYPE = {
     "CHOICE": 1,
     "VOTE": 2,
+<<<<<<< HEAD
     "CLOSE": 2
+=======
+    "CLOSE": 3
+>>>>>>> class
 }
 
 STRUCT_CALLBACK = {

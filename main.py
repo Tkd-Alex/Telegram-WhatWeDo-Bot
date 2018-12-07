@@ -11,6 +11,18 @@ from pprint import pprint
 from pymongo import MongoClient
 from bson import ObjectId
 
+# Custom file
+from support_object import *
+
+# Custom class importer
+from DayManager import DayManager
+from PoolManager import PoolManager
+from ProposeManager import ProposeManager
+
+daymanager = DayManager()
+poolmanager = PoolManager()
+proposemanager = ProposeManager()
+
 # Telegram import 
 from telegram.ext import Updater, CommandHandler, MessageHandler, Filters, CallbackQueryHandler
 from telegram import InlineKeyboardButton, InlineKeyboardMarkup, MessageEntity
@@ -37,70 +49,6 @@ week_days = list( calendar.day_name )
 
 means_of_transport = [ p.rstrip() for p in open("mezzi_di_trasporto.txt","r").readlines() ]
 
-day_transformers = {
-    "domani": 1,
-    "dopodomani": 2
-}
-
-time_pointers = {
-    "stasera": 20,
-    "sera": 20,
-    "pranzo": 13,
-    "cena": 21,
-    "colazione": 8,
-    "oggi": 0
-}
-
-prepositions = {
-    "di":       False, # a casa di alex (?)
-    "del":      False,
-    "dello":    False,
-    "della":    False,
-    "dei":      False,
-    "degli":    False,
-    "delle":    False,
-    
-    "a":        True, # a piedi? (solved with dict)
-    "al":       True,
-    "allo":     True,
-    "alla":     True,
-    "ai":       False,
-    "agli":     False,
-    "alle":     False,
-
-    "da":       False,
-    "dal":      False,
-    "dallo":    False,
-    "dalla":    False,
-    "dai":      False,
-    "dagli":    False,
-    "dalle":    False,
-
-    "in":       True, # in auto? (solved with dict)
-    "nel":      False,
-    "nello":    False,
-    "nella":    False,
-    "nei":      False,
-    "negli":    False,
-    "nelle":    False,
-
-    "con":      False,
-
-    "su":       False,
-    "sul":      False,
-    "sullo":    False,
-    "sulla":    False,
-    "sui":      False,
-    "sugli":    False,
-    "sulle":    False,
-
-    "per":      False,
-
-    "tra":      False,
-
-    "fra":      False
-}
-
 # Controllare per ogni sentenza se:
 # 1 - È una nuova proposta, dunque non esiste un altro pool relativo allo stesso giorno e stesso orario di chiusura.
 # 2 - Se è una risposta al pool capire a quale pool associarlo:
@@ -115,16 +63,8 @@ def analyzes_message(bot, update):
     proposals = []
     
     default_value = True
-    new_pool = { 
-        "title": None, 
-        "closed": False, 
-        "time_value": {
-            "close_datetime": utils.get_close_pool( (datetime.datetime.now() + datetime.timedelta( days=1 ) ) ),
-            "pool_day": week_days[datetime.datetime.now().weekday()],
-            "time_pointers": "oggi"
-        }
-    } 
-    
+    new_pool = poolmanager.init_pool()
+
     # Iterate sentence.
     for sentence in sentences:
         # Create an array of word already tagged from [i] sentence
@@ -149,9 +89,9 @@ def analyzes_message(bot, update):
                     if tags[index].pos.startswith("NOM"):
 
                         # This word is a day! Set pool_day and ignore the following code.
-                        is_day = utils.is_day(tags[index].word, week_days)
+                        is_day = daymanager.is_day(tags[index].word)
                         if is_day != -1:
-                            new_pool['time_value']['pool_day'] = week_days[is_day]
+                            new_pool['time_value']['pool_day'] = daymanager.get_day(index=is_day)
                             continue
 
                         # This word is a time pointers like ["pranzo", "cena"]. Set close pool by tome_pointers value.
@@ -190,20 +130,14 @@ def analyzes_message(bot, update):
                 else:
                     middle = { 'index': -1, 'status': False }
 
-    day_to_add = utils.day_to_add(datetime.datetime.now(), new_pool['time_value']['pool_day'], week_days )
-    new_pool['time_value']['close_datetime'] = utils.get_close_pool( (datetime.datetime.now() + datetime.timedelta( day_to_add ) ), time_pointers[new_pool['time_value']['time_pointers']] )                        
-
+    day_to_add = daymanager.day_to_add(datetime.datetime.now(), new_pool['time_value']['pool_day'])
+    new_pool['time_value']['close_datetime'] = daymanager.get_close_pool( daymanager.add_day(day_to_add), time_pointers[new_pool['time_value']['time_pointers']] )
+    
     # There is another pool open in the same day?
-    if new_pool['title'] != None and database.pool.find_one({
-            "chat_id": update.message.chat_id, 
-            "closed": False, 
-            "time_value.pool_day": new_pool['time_value']['pool_day'], 
-            "time_value.time_pointers": new_pool['time_value']['time_pointers']
-        }) is None:
+    if new_pool['title'] != None and poolmanager.pools_same_day(update.message.chat_id, new_pool['time_value']) is None:
             utils.create_new_pool(new_pool, proposals, update.message, bot, database)
     elif proposals != []:
-        opened_pool = database.pool.find({"chat_id": update.message.chat_id, "closed": False})
-        opened_pool = list(opened_pool)
+        opened_pool = poolmanager.get_opened_pools(update.message.chat_id)
         if len(opened_pool) == 1:
             utils.update_propose(opened_pool[0], proposals, update.message.chat_id, bot, database)
         elif len(opened_pool) > 1:
@@ -220,32 +154,31 @@ def analyzes_message(bot, update):
                     "proposals": proposals, 
                     "from_user": update.message.from_user.id,
                 }
-                database.pending_propose.insert_one( pending_propose )
+                _id = proposemanager.new_propose(pending_propose)
                 question_pool_message = update.message.reply_text("Scusami a quale sondaggio ti riferisci?", reply_markup=utils.ask_pool(pending_propose))
-                database.pending_propose.update_one({"_id": pending_propose['_id']}, {"$set": {"message_id": question_pool_message.message_id} })
+                proposemanager.update_propose(_id, {"message_id": question_pool_message.message_id} )
 
 def button(bot, update):
     query = update.callback_query
     callback_data = json.loads(query.data)
     if callback_data[utils.STRUCT_CALLBACK['TYPE']] == utils.BUTTON_TYPE['VOTE']:
-        pool = database.pool.find_one({"_id": ObjectId(callback_data[utils.STRUCT_CALLBACK['ID']])})
+        pool = poolmanager.get_pool(callback_data[utils.STRUCT_CALLBACK['ID']])
         if query.from_user.id not in pool['proposals'][callback_data[utils.STRUCT_CALLBACK['INDEX']]]['voted_by']: 
             pool['proposals'][callback_data[utils.STRUCT_CALLBACK['INDEX']]]['voted_by'].append(query.from_user.id)
-
             bot.edit_message_text(
                 pool['title'], 
                 chat_id=query.message.chat.id, 
                 message_id=pool['message_id'], 
                 reply_markup=utils.render_keyboard( pool )
             )
-            database.pool.update_one({"_id": pool['_id']}, {"$set": {'proposals': pool["proposals"]} })
+            poolmanager.update_pool(pool['_id'], {'proposals': pool["proposals"]})
     elif callback_data[utils.STRUCT_CALLBACK['TYPE']] == utils.BUTTON_TYPE['CLOSE']:
-        pool = database.pool.find_one({"_id": ObjectId(callback_data[utils.STRUCT_CALLBACK['ID']])})
+        pool = poolmanager.get_pool(callback_data[utils.STRUCT_CALLBACK['ID']])
         handle_close_pool(pool, bot)
     elif callback_data[utils.STRUCT_CALLBACK['TYPE']] == utils.BUTTON_TYPE['CHOICE']:
-        pending_propose = database.pending_propose.find_one({"_id": ObjectId(callback_data[utils.STRUCT_CALLBACK['ID']])})
+        pending_propose = proposemanager.get_propose(callback_data[utils.STRUCT_CALLBACK['ID']])
         if query.from_user.id == pending_propose['from_user']:
-            pool = database.pool.find_one({"_id": ObjectId( pending_propose['pools'][callback_data[utils.STRUCT_CALLBACK['INDEX']]]['_id'] )})
+            pool = poolmanager.get_pool(pending_propose['pools'][callback_data[utils.STRUCT_CALLBACK['INDEX']]]['_id'] )
             utils.update_propose(pool, pending_propose['proposals'], query.message.chat.id, bot, database)
             bot.delete_message(query.message.chat.id, pending_propose['message_id'])
 
@@ -261,26 +194,20 @@ def handle_close_pool(pool, bot):
             close_message += "- <i>{}</i>\n".format(winner['propose'].capitalize())
 
     bot.send_message(pool['chat_id'], close_message, parse_mode="HTML")
-    database.pool.update_one({"_id": pool['_id']}, {"$set": {'closed': True}} )
-
+    poolmanager.update_pool(pool['_id'], {'closed': True})
+    
 # Quale pool vuoi chiudere?
 def close_pool(bot, update):
-    pools = database.pool.find({"chat_id": update.message.chat_id, "closed": False, "owner": update.message.from_user.id})
-    pools = list(pools)
-    if pools == []:
+    opened_pool = poolmanager.get_opened_pools(update.message.chat_id, owner=update.message.from_user.id)
+    if opened_pool == []:
         update.message.reply_text('Non hai sondaggi aperti in questo gruppo!')
-    elif len(pools) == 1:
-        handle_close_pool(pools[0], bot)
+    elif len(opened_pool) == 1:
+        handle_close_pool(opened_pool[0], bot)
     else:
-        update.message.reply_text("Sembra ci siano più sondaggi aperti. A quale ti riferisci?", reply_markup=utils.pools_to_close(pools))
+        update.message.reply_text("Sembra ci siano più sondaggi aperti. A quale ti riferisci?", reply_markup=utils.pools_to_close(opened_pool))
 
 def tick_pool(bot, job):
-    pools = database.pool.find({
-        "time_value.time_pointers": job.context,
-        "time_value.pool_day": week_days[datetime.datetime.now().weekday()], # Force database params. Not necessary.
-        "time_value.close_datetime": utils.get_close_pool(datetime.datetime.now(), time_pointers[job.context])
-    })
-    pools = list(pools)
+    pools = poolmanager.get_pools_toclose(job.context)
     for pool in pools:
         handle_close_pool(pool, bot)
 
