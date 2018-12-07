@@ -137,7 +137,6 @@ def analyzes_message(bot, update):
         if len(negations) % 2 == 0:
             middle = { 'index': -1, 'status': False }
             for index in range(0, len(tags)):
-                print(tags[index])
                 
                 # This word is a day_transformers! Set new pool day ad +1/+2 on today timestamp.
                 if tags[index].pos.startswith("ADV") and tags[index].word in day_transformers:
@@ -171,9 +170,9 @@ def analyzes_message(bot, update):
                         if not(tags[middle['index']-1].lemma == "andare" and tags[index].pos.startswith("VER")):
                             propose = "{} {} {}".format(tags[middle['index']-1].word, tags[middle['index']].word, tags[index].word)
                     
-                    if tags[index].lemma != "andare" and propose is None:
+                    if tags[index].lemma not in ["andare", "avere"] and propose is None:
                         if index+1 < len(tags):
-                            if tags[index+1].pos.startswith("NOM") and not tags[index].pos.startswith("NOM"):
+                            if tags[index+1].pos.startswith("NOM") and not tags[index].pos.startswith("NOM") and utils.is_day(tags[index].word, week_days) != -1 :
                                 propose = "{} {}".format(tags[index].word, tags[index+1].word)
                         elif not tags[index].pos.startswith("NOM"):
                             propose = tags[index].word
